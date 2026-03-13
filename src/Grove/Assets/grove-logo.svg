@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="96" height="96" viewBox="0 0 96 96">
+  <!-- Branches -->
+  <line x1="48" y1="22" x2="24" y2="72" stroke="#2BC48A" stroke-width="6" stroke-linecap="round"/>
+  <line x1="48" y1="22" x2="72" y2="72" stroke="#2BC48A" stroke-width="6" stroke-linecap="round"/>
+  <!-- Nodes -->
+  <circle cx="48" cy="18" r="16" fill="#1A9E6F"/>
+  <circle cx="24" cy="76" r="13" fill="#1A9E6F"/>
+  <circle cx="72" cy="76" r="13" fill="#1A9E6F"/>
+</svg>

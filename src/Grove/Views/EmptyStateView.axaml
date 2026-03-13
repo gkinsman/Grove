@@ -13,6 +13,10 @@
                     Spacing="24"
                     MaxWidth="400">
 
+            <Image Source="/Assets/grove-logo-128.png"
+                   Width="80" Height="80"
+                   HorizontalAlignment="Center" />
+
             <TextBlock Text="grove"
                        FontSize="48"
                        FontWeight="Bold"

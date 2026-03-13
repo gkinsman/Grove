@@ -11,10 +11,15 @@
     <Border Background="{DynamicResource SidebarBackgroundBrush}">
         <DockPanel>
             <!-- Header -->
-            <StackPanel DockPanel.Dock="Top" Margin="16,12">
+            <StackPanel DockPanel.Dock="Top" Margin="16,12"
+                        Orientation="Horizontal" Spacing="10">
+                <Image Source="/Assets/grove-logo-32.png"
+                       Width="24" Height="24"
+                       VerticalAlignment="Center" />
                 <TextBlock Text="grove"
                            FontSize="18"
                            FontWeight="Bold"
+                           VerticalAlignment="Center"
                            Foreground="{DynamicResource SidebarForegroundBrush}" />
             </StackPanel>
 

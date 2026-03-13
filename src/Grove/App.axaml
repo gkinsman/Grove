@@ -24,7 +24,7 @@
 
     <TrayIcon.Icons>
         <TrayIcons>
-            <TrayIcon Icon="/Assets/avalonia-logo.ico"
+            <TrayIcon Icon="/Assets/grove-logo.ico"
                       ToolTipText="Grove">
                 <TrayIcon.Menu>
                     <NativeMenu>

@@ -1,4 +1,4 @@
-# Grove
+# grove
 
 **A cross-platform\* git worktree command runner**
 

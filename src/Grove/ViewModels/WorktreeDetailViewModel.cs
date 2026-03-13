@@ -187,9 +187,7 @@ public class WorktreeDetailViewModel : ViewModelBase, IDisposable
     {
         try
         {
-            var envOverrides = _config.Config.Worktrees
-                .GetValueOrDefault(_info.Path)?.Env;
-            var psi = _shell.CreateStartInfo(Command, _info.Path, envOverrides);
+            var psi = _shell.CreateStartInfo(Command, _info.Path);
             var runner = _processManager.GetOrCreate(_info.Path);
             runner.Start(psi);
             FlushCommand();
@@ -208,9 +206,7 @@ public class WorktreeDetailViewModel : ViewModelBase, IDisposable
 
     private async Task DoRestartAsync(CancellationToken ct)
     {
-        var envOverrides = _config.Config.Worktrees
-            .GetValueOrDefault(_info.Path)?.Env;
-        var psi = _shell.CreateStartInfo(Command, _info.Path, envOverrides);
+        var psi = _shell.CreateStartInfo(Command, _info.Path);
         var runner = _processManager.GetOrCreate(_info.Path);
         await runner.RestartAsync(psi);
     }

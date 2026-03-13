@@ -97,7 +97,7 @@ public class SettingsViewModel : ViewModelBase
     {
         _config.Config.DefaultCommand = DefaultCommand;
         _config.Config.AutoStart = AutoStart;
-        _config.Config.Theme = Theme;
+        _config.Config.Theme = Theme;   
         _config.Config.ConsoleFontSize = ConsoleFontSize;
         _config.Config.Roots = _rootList.ToList();
         _config.Config.Presets = _presetList.ToList();

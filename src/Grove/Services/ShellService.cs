@@ -6,10 +6,7 @@ namespace Grove.Services;
 
 public sealed class ShellService : IShellService
 {
-    public ProcessStartInfo CreateStartInfo(
-        string command,
-        string workingDirectory,
-        Dictionary<string, string>? envOverrides = null)
+    public ProcessStartInfo CreateStartInfo(string command, string workingDirectory)
     {
         var isWindows = OperatingSystem.IsWindows();
 
@@ -21,7 +18,7 @@ public sealed class ShellService : IShellService
             ? $"/c \"{command}\""
             : $"-c \"{command.Replace("\\", "\\\\").Replace("\"", "\\\"")}\"";
 
-        var psi = new ProcessStartInfo
+        return new ProcessStartInfo
         {
             FileName = isWindows ? "cmd.exe" : "/bin/sh",
             Arguments = escapedArgs,
@@ -34,13 +31,5 @@ public sealed class ShellService : IShellService
             StandardOutputEncoding = Encoding.UTF8,
             StandardErrorEncoding = Encoding.UTF8,
         };
-
-        if (envOverrides is not null)
-        {
-            foreach (var (key, value) in envOverrides)
-                psi.Environment[key] = value;
-        }
-
-        return psi;
     }
 }

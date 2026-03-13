@@ -201,20 +201,6 @@ public class CommandSyncServiceTests
             Assert.Equal("fallback", config.Worktrees[path].Command));
     }
 
-    [Fact]
-    public void DisableSync_PreservesEnvOverrides()
-    {
-        var config = CreateConfig(f1Cmd: "old");
-        config.Worktrees["/repo/feature-1"].Env["PORT"] = "3001";
-        var svc = new CommandSyncService(config);
-        var root = CreateRoot(sync: true, defaultCmd: "npm run dev");
-
-        svc.DisableSync(root, SiblingPaths);
-
-        Assert.Equal("npm run dev", config.Worktrees["/repo/feature-1"].Command);
-        Assert.Equal("3001", config.Worktrees["/repo/feature-1"].Env["PORT"]);
-    }
-
     // ── Full scenarios ───────────────────────────────────────────
 
     [Fact]

@@ -112,7 +112,7 @@ public sealed class ProcessRunner : IProcessRunner
         }
 
         // Give the exited event handler a moment to fire and capture final output
-        try { await WaitForExitAsync(process, TimeSpan.FromSeconds(2)); } catch { /* process may already be disposed */ }
+        try { await WaitForExitAsync(process, TimeSpan.FromSeconds(1)); } catch { /* process may already be disposed */ }
 
         // If the exited handler hasn't cleaned up yet, do it now
         if (_process is not null)

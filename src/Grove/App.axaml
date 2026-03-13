@@ -22,21 +22,5 @@
         <StyleInclude Source="/Styles/StatusStyles.axaml" />
     </Application.Styles>
 
-    <TrayIcon.Icons>
-        <TrayIcons>
-            <TrayIcon Icon="/Assets/grove-logo.ico"
-                      ToolTipText="Grove">
-                <TrayIcon.Menu>
-                    <NativeMenu>
-                        <NativeMenuItem Header="Show Grove"
-                                        Command="{Binding ShowWindowCommand, Source={x:Static local:App.TrayViewModel}}" />
-                        <NativeMenuItemSeparator />
-                        <NativeMenuItem Header="Quit"
-                                        Command="{Binding QuitCommand, Source={x:Static local:App.TrayViewModel}}" />
-                    </NativeMenu>
-                </TrayIcon.Menu>
-            </TrayIcon>
-        </TrayIcons>
-    </TrayIcon.Icons>
 
 </Application>

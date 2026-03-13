@@ -37,12 +37,25 @@
                         <DataTemplate DataType="vm:RootViewModel">
                             <StackPanel Margin="0,2">
                                 <!-- Root header -->
-                                <Button Command="{Binding ToggleExpandCommand}"
-                                        Classes="root-header">
+                                <Grid ColumnDefinitions="*,Auto">
+                                    <Button Grid.Column="0"
+                                            Command="{Binding ToggleExpandCommand}"
+                                            Classes="root-header"
+                                            HorizontalContentAlignment="Left">
                                         <TextBlock Text="{Binding Name}"
                                                    FontWeight="SemiBold"
                                                    Foreground="{DynamicResource SidebarGroupHeaderBrush}" />
-                                </Button>
+                                    </Button>
+                                    <Button Grid.Column="1"
+                                            Command="{Binding #Root.((vm:MainWindowViewModel)DataContext).RemoveRootCommand}"
+                                            CommandParameter="{Binding}"
+                                            Classes="root-remove"
+                                            ToolTip.Tip="Remove root">
+                                        <TextBlock Text="✕"
+                                                   FontSize="12"
+                                                   Foreground="{DynamicResource SidebarGroupHeaderBrush}" />
+                                    </Button>
+                                </Grid>
 
                                 <!-- Worktree entries -->
                                 <ItemsControl ItemsSource="{Binding Worktrees}"

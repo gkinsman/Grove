@@ -54,6 +54,7 @@ public class MainWindowViewModel : ViewModelBase
     // Commands
     public ReactiveCommand<Unit, Unit> RefreshCommand { get; }
     public ReactiveCommand<Unit, Unit> AddRootCommand { get; }
+    public ReactiveCommand<RootViewModel, Unit> RemoveRootCommand { get; }
     public ReactiveCommand<Unit, Unit> OpenSettingsCommand { get; }
     public ReactiveCommand<WorktreeViewModel, Unit> SelectWorktreeCommand { get; }
 
@@ -97,6 +98,7 @@ public class MainWindowViewModel : ViewModelBase
         // Commands
         RefreshCommand = ReactiveCommand.CreateFromTask(RefreshAllAsync);
         AddRootCommand = ReactiveCommand.CreateFromTask(AddRootAsync);
+        RemoveRootCommand = ReactiveCommand.CreateFromTask<RootViewModel>(RemoveRootAsync);
         OpenSettingsCommand = ReactiveCommand.Create(() => { IsSettingsOpen = !IsSettingsOpen; });
         SelectWorktreeCommand = ReactiveCommand.Create<WorktreeViewModel>(wt => SelectedWorktree = wt);
 
@@ -146,6 +148,24 @@ public class MainWindowViewModel : ViewModelBase
         {
             await rootVm.LoadWorktreesCommand.Execute();
         }
+    }
+
+    private async Task RemoveRootAsync(RootViewModel root, CancellationToken ct)
+    {
+        // Remove from config
+        var configRoot = _config.Config.Roots.FirstOrDefault(r => r.Id == root.Id);
+        if (configRoot != null)
+        {
+            _config.Config.Roots.Remove(configRoot);
+            await _config.SaveAsync(ct);
+        }
+
+        // Remove from cache (updates UI)
+        _roots.Remove(root);
+
+        // Clear selection if it belonged to this root
+        if (SelectedWorktree != null && root.Worktrees.Contains(SelectedWorktree))
+            SelectedWorktree = null;
     }
 
     private async Task AddRootAsync(CancellationToken ct)

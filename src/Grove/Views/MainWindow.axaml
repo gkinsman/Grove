@@ -11,25 +11,82 @@
         Title="grove"
         Width="1200" Height="700"
         MinWidth="800" MinHeight="500"
+        SystemDecorations="BorderOnly"
+        ExtendClientAreaToDecorationsHint="True"
+        ExtendClientAreaChromeHints="NoChrome"
+        ExtendClientAreaTitleBarHeightHint="0"
+        CanResize="True"
         Background="{DynamicResource DetailBackgroundBrush}">
 
-    <Grid ColumnDefinitions="280,*">
+    <Grid RowDefinitions="Auto,*">
 
-        <!-- Sidebar -->
-        <views:SidebarView Grid.Column="0" />
+        <!-- Title bar — full width, draggable -->
+        <Border Grid.Row="0"
+                Background="{DynamicResource SidebarBackgroundBrush}"
+                BorderBrush="{DynamicResource BorderBrush}"
+                BorderThickness="0,0,0,1"
+                Name="TitleBar"
+                PointerPressed="TitleBar_PointerPressed">
+            <Grid ColumnDefinitions="Auto,*,Auto" Height="44">
+                <!-- Logo + title -->
+                <StackPanel Grid.Column="0"
+                            Orientation="Horizontal" Spacing="10"
+                            Margin="16,0"
+                            VerticalAlignment="Center">
+                    <Image Source="/Assets/grove-logo-32.png"
+                           Width="24" Height="24"
+                           VerticalAlignment="Center" />
+                    <TextBlock Text="grove"
+                               FontSize="18"
+                               FontWeight="Bold"
+                               VerticalAlignment="Center"
+                               Foreground="{DynamicResource SidebarForegroundBrush}" />
+                </StackPanel>
 
-        <!-- Detail panel or Settings or Empty state -->
-        <Grid Grid.Column="1">
-            <!-- Empty state — shown when no roots configured -->
-            <views:EmptyStateView IsVisible="{Binding !HasRoots}" />
+                <!-- Window control buttons -->
+                <StackPanel Grid.Column="2"
+                            Orientation="Horizontal"
+                            VerticalAlignment="Stretch">
+                    <Button Classes="window-control"
+                            Click="Minimize_Click"
+                            ToolTip.Tip="Minimize">
+                        <TextBlock Text="&#xE921;" FontFamily="Segoe MDL2 Assets" FontSize="10" />
+                    </Button>
+                    <Button Classes="window-control"
+                            Click="MaximizeRestore_Click"
+                            ToolTip.Tip="Maximize">
+                        <TextBlock Text="&#xE922;" FontFamily="Segoe MDL2 Assets" FontSize="10"
+                                   x:Name="MaximizeIcon" />
+                    </Button>
+                    <Button Classes="window-control window-close"
+                            Click="Close_Click"
+                            ToolTip.Tip="Close">
+                        <TextBlock Text="&#xE8BB;" FontFamily="Segoe MDL2 Assets" FontSize="10" />
+                    </Button>
+                </StackPanel>
+            </Grid>
+        </Border>
 
-            <!-- Detail panel — shown when a worktree is selected and settings not open -->
-            <ContentControl Content="{Binding Detail}"
-                            IsVisible="{Binding !IsSettingsOpen}" />
+        <!-- Main content: sidebar + detail -->
+        <Grid Grid.Row="1" ColumnDefinitions="280,*">
 
-            <!-- Settings panel — shown when settings open -->
-            <ContentControl Content="{Binding SettingsViewModel}"
-                            IsVisible="{Binding IsSettingsOpen}" />
+            <!-- Sidebar -->
+            <views:SidebarView Grid.Column="0" />
+
+            <!-- Detail panel or Settings or Empty state -->
+            <Grid Grid.Column="1">
+                <!-- Empty state — shown when no roots configured -->
+                <views:EmptyStateView IsVisible="{Binding !HasRoots}" />
+
+                <!-- Detail panel — shown when a worktree is selected and settings not open -->
+                <ContentControl Content="{Binding Detail}"
+                                IsVisible="{Binding !IsSettingsOpen}" />
+
+                <!-- Settings panel — shown when settings open -->
+                <ContentControl Content="{Binding SettingsViewModel}"
+                                IsVisible="{Binding IsSettingsOpen}" />
+            </Grid>
+
         </Grid>
 
     </Grid>

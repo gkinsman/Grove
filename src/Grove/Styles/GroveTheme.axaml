@@ -107,4 +107,23 @@
     <Setter Property="LetterSpacing" Value="1" />
   </Style>
 
+  <!-- Window control buttons (title bar) -->
+  <Style Selector="Button.window-control">
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="Foreground" Value="{DynamicResource SidebarForegroundBrush}" />
+    <Setter Property="BorderThickness" Value="0" />
+    <Setter Property="Width" Value="46" />
+    <Setter Property="VerticalAlignment" Value="Stretch" />
+    <Setter Property="HorizontalContentAlignment" Value="Center" />
+    <Setter Property="VerticalContentAlignment" Value="Center" />
+    <Setter Property="CornerRadius" Value="0" />
+    <Setter Property="Padding" Value="0" />
+  </Style>
+  <Style Selector="Button.window-control:pointerover /template/ ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource SidebarItemHoverBrush}" />
+  </Style>
+  <Style Selector="Button.window-close:pointerover /template/ ContentPresenter">
+    <Setter Property="Background" Value="#E81123" />
+  </Style>
+
 </Styles>

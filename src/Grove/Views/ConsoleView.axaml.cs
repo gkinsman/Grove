@@ -15,6 +15,7 @@ namespace Grove.Views;
 public partial class ConsoleView : ReactiveUserControl<WorktreeDetailViewModel>
 {
     private bool _isAtBottom = true;
+    private SerialDisposable _consoleSubscription = new();
 
     public ConsoleView()
     {
@@ -22,12 +23,9 @@ public partial class ConsoleView : ReactiveUserControl<WorktreeDetailViewModel>
 
         this.WhenActivated(d =>
         {
-            var scroller = this.FindControl<ScrollViewer>("ConsoleScroller");
-            var textBlock = this.FindControl<SelectableTextBlock>("ConsoleTextBlock");
-            var copyButton = this.FindControl<Button>("CopyButton");
-            if (scroller is null || textBlock is null) return;
+            _consoleSubscription.DisposeWith(d);
 
-            textBlock.Inlines ??= [];
+            var copyButton = this.FindControl<Button>("CopyButton");
 
             // Copy button — copies all console text to clipboard
             if (copyButton is not null)
@@ -38,41 +36,62 @@ public partial class ConsoleView : ReactiveUserControl<WorktreeDetailViewModel>
             }
 
             // Track whether user has scrolled up
-            scroller.ScrollChanged += (_, _) =>
+            var scroller = this.FindControl<ScrollViewer>("ConsoleScroller");
+            if (scroller is not null)
             {
-                _isAtBottom = scroller.Offset.Y >=
-                    scroller.Extent.Height - scroller.Viewport.Height - 20;
-            };
-
-            // Populate existing lines
-            if (ViewModel?.ConsoleLines is { } lines)
-            {
-                foreach (var line in lines)
-                    AppendLine(textBlock, line);
-
-                // Watch for new/removed lines
-                void OnCollectionChanged(object? sender, NotifyCollectionChangedEventArgs e)
+                scroller.ScrollChanged += (_, _) =>
                 {
-                    if (e.Action == NotifyCollectionChangedAction.Add && e.NewItems is not null)
-                    {
-                        foreach (ConsoleLine newLine in e.NewItems)
-                            AppendLine(textBlock, newLine);
-
-                        if (_isAtBottom)
-                            scroller.ScrollToEnd();
-                    }
-                    else if (e.Action == NotifyCollectionChangedAction.Reset)
-                    {
-                        textBlock.Inlines?.Clear();
-                    }
-                }
-
-                var notifier = (INotifyCollectionChanged)lines;
-                notifier.CollectionChanged += OnCollectionChanged;
-                Disposable.Create(() => notifier.CollectionChanged -= OnCollectionChanged)
-                    .DisposeWith(d);
+                    _isAtBottom = scroller.Offset.Y >=
+                        scroller.Extent.Height - scroller.Viewport.Height - 20;
+                };
             }
+
+            // Re-bind console lines whenever the ViewModel changes (DataContext swap)
+            this.WhenAnyValue(x => x.ViewModel)
+                .Subscribe(vm => BindConsoleLines(vm))
+                .DisposeWith(d);
         });
+    }
+
+    private void BindConsoleLines(WorktreeDetailViewModel? vm)
+    {
+        var scroller = this.FindControl<ScrollViewer>("ConsoleScroller");
+        var textBlock = this.FindControl<SelectableTextBlock>("ConsoleTextBlock");
+        if (textBlock is null) return;
+
+        // Clear previous content and subscription
+        textBlock.Inlines?.Clear();
+        textBlock.Inlines ??= [];
+        var d = new CompositeDisposable();
+        _consoleSubscription.Disposable = d;
+
+        if (vm?.ConsoleLines is not { } lines) return;
+
+        // Populate existing lines
+        foreach (var line in lines)
+            AppendLine(textBlock, line);
+
+        // Watch for new/removed lines
+        void OnCollectionChanged(object? sender, NotifyCollectionChangedEventArgs e)
+        {
+            if (e.Action == NotifyCollectionChangedAction.Add && e.NewItems is not null)
+            {
+                foreach (ConsoleLine newLine in e.NewItems)
+                    AppendLine(textBlock, newLine);
+
+                if (_isAtBottom && scroller is not null)
+                    scroller.ScrollToEnd();
+            }
+            else if (e.Action == NotifyCollectionChangedAction.Reset)
+            {
+                textBlock.Inlines?.Clear();
+            }
+        }
+
+        var notifier = (INotifyCollectionChanged)lines;
+        notifier.CollectionChanged += OnCollectionChanged;
+        Disposable.Create(() => notifier.CollectionChanged -= OnCollectionChanged)
+            .DisposeWith(d);
     }
 
     private async void OnCopyClick(object? sender, RoutedEventArgs e)

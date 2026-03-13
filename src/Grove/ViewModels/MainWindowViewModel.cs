@@ -31,8 +31,12 @@ public class MainWindowViewModel : ViewModelBase
     }
 
     // Detail panel — derived from selection, disposes previous VM
-    private readonly ObservableAsPropertyHelper<WorktreeDetailViewModel?> _detail;
-    public WorktreeDetailViewModel? Detail => _detail.Value;
+    private WorktreeDetailViewModel? _detail;
+    public WorktreeDetailViewModel? Detail
+    {
+        get => _detail;
+        private set => this.RaiseAndSetIfChanged(ref _detail, value);
+    }
 
     // Settings panel
     private bool _isSettingsOpen;
@@ -79,21 +83,34 @@ public class MainWindowViewModel : ViewModelBase
             .Subscribe();
 
         // Detail VM derived from selection — dispose previous VM on switch
-        _detail = this.WhenAnyValue(x => x.SelectedWorktree)
-            .Select(wt =>
+        this.WhenAnyValue(x => x.SelectedWorktree)
+            .ObserveOn(RxApp.MainThreadScheduler)
+            .Subscribe(wt =>
             {
-                if (wt is null) return null;
-                var root = _rootList.FirstOrDefault(r => r.Worktrees.Contains(wt));
-                var siblingPaths = root?.Worktrees.Select(w => w.Info.Path).ToList()
-                    ?? new List<string>();
-                return new WorktreeDetailViewModel(wt.Info, _processManager, _shell, _config, siblingPaths, root?.RootConfig);
-            })
-            .Scan<WorktreeDetailViewModel?, WorktreeDetailViewModel?>(null, (prev, next) =>
-            {
-                prev?.Dispose();
-                return next;
-            })
-            .ToProperty(this, x => x.Detail);
+                // Dispose previous VM
+                var prev = Detail;
+                if (prev is not null)
+                {
+                    // Null out first so ContentControl tears down the old view
+                    Detail = null;
+                    try { prev.Dispose(); }
+                    catch (Exception ex) { System.Diagnostics.Debug.WriteLine($"[grove] Dispose error: {ex}"); }
+                }
+
+                if (wt is null) return;
+
+                try
+                {
+                    var root = _rootList.FirstOrDefault(r => r.Worktrees.Contains(wt));
+                    var siblingPaths = root?.Worktrees.Select(w => w.Info.Path).ToList()
+                        ?? new List<string>();
+                    Detail = new WorktreeDetailViewModel(wt.Info, _processManager, _shell, _config, siblingPaths, root?.RootConfig);
+                }
+                catch (Exception ex)
+                {
+                    System.Diagnostics.Debug.WriteLine($"[grove] Failed to create detail VM: {ex}");
+                }
+            });
 
         // Empty state
         _hasRoots = _roots.CountChanged

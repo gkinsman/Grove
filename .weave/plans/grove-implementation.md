@@ -1,59 +1,75 @@
 # Grove — Full Implementation Plan
 
 ## TL;DR
-> **Summary**: Build Grove from scratch — a desktop git worktree manager with Avalonia UI (.NET 10), featuring a sidebar with collapsible repo groups, per-worktree command execution, live ANSI-colored console output, and system tray persistence.
+> **Summary**: Build Grove, a desktop git worktree manager with Avalonia UI (.NET 10), ReactiveUI MVVM, per-worktree process execution, live ANSI console output, and system tray persistence — from zero to shipping v1.
 > **Estimated Effort**: XL (6 phases, ~60 tasks)
 
 ## Context
 
 ### Original Request
-Implement the complete Grove application as described in `GOAL.md` — a two-panel desktop app that discovers git worktrees across configured roots, lets users run/stop/restart commands per worktree, and streams live console output with ANSI color support. The app persists processes via system tray when the window is closed.
+Build the complete Grove application as described in GOAL.md: a two-panel desktop app (sidebar + detail) that discovers git worktrees across configured roots, lets users run/stop/restart commands per worktree, streams live console output with ANSI color support, and persists to the system tray when closed.
 
 ### Key Findings
-- **Greenfield**: No code exists. Only `GOAL.md` and `image.png` (UI mockup) are present.
-- **.NET 10.0.200** is installed. Avalonia MVVM template (`avalonia.mvvm`) is available.
-- **CommunityToolkit.Mvvm 8.4.0** is the latest stable — supports .NET 8+ (compatible with .NET 10).
-- **Avalonia TrayIcon** is built-in — defined in `App.axaml` with `NativeMenu`. No third-party package needed.
-- **TreeView** with `TreeDataTemplate` supports hierarchical data with `ItemsSource` binding — perfect for roots → worktrees.
-- **ANSI color rendering** is non-trivial in Avalonia. Best approach: parse ANSI escape codes into `InlineCollection` with `Run` elements styled with foreground colors. Use `SelectableTextBlock` (supports `Inlines`) inside an `ItemsRepeater` for virtualized line rendering.
-- **UI mockup** (image.png) shows: dark theme, left sidebar (~280px) with root headers and worktree entries (dot + branch + path), right panel with header (branch, path, upstream, status badge), COMMAND section (text input + stop/restart buttons), preset chips row, and dark console area with colored output.
+- **Template**: `dotnet new avalonia.mvvm -m ReactiveUI` is available and generates a ReactiveUI-based Avalonia project. Default Avalonia version is 11.2.1. Template targets net9.0 max — we must manually retarget to `net10.0`.
+- **.NET 10.0.200 SDK** is installed and ready.
+- **No code exists** — completely greenfield.
+- **UI mockup** (image.png) shows: dark sidebar with repo group headers, worktree entries with colored status dots + branch name + path, detail panel with branch header/status badge, command bar with stop/restart buttons, preset chips, and a dark terminal-style console output area.
+- **Data model** is JSON-based, stored at `%APPDATA%\grove\config.json` (Windows) / `~/.config/grove/config.json` (Unix).
+- **Process management** requires: spawn via platform shell, capture stdout/stderr as Rx streams, track exit codes, support stop/force-kill/restart, one process per worktree max.
+- **Console**: 10,000-line ring buffer per worktree, ANSI color parsing, monospace rendering.
 
 ### Architecture Decisions
-1. **Solution structure**: `Grove.sln` with two projects — `src/Grove` (Avalonia app) and `src/Grove.Core` (class library, no UI dependency).
-2. **MVVM**: CommunityToolkit.Mvvm with source generators (`[ObservableProperty]`, `[RelayCommand]`).
-3. **DI**: `Microsoft.Extensions.DependencyInjection` for service registration (lightweight, no Prism/DryIoc overhead).
-4. **Git CLI**: Shell out via `System.Diagnostics.Process`, parse `git worktree list --porcelain` output.
-5. **Config**: `System.Text.Json` with source generators for AOT-friendly serialization.
-6. **Console**: Custom `AnsiParser` converts escape sequences to styled `Run` elements. `ItemsRepeater` virtualizes 10K-line ring buffer.
-7. **Process management**: One `ManagedProcess` per worktree, wrapping `System.Diagnostics.Process` with async output streaming via `OutputDataReceived`/`ErrorDataReceived`.
+
+| Decision | Choice | Rationale |
+|----------|--------|-----------|
+| Solution structure | `Grove.sln` → `src/Grove` (app) + `src/Grove.Core` (library) | Separation of concerns; Core has no UI dependency, testable in isolation |
+| MVVM framework | **ReactiveUI** with `Avalonia.ReactiveUI` | Rx-native commands, OAPH, DynamicData for collections — NOT CommunityToolkit.Mvvm |
+| DI container | `Microsoft.Extensions.DependencyInjection` | Standard .NET DI; wired into ReactiveUI's Locator if needed |
+| Reactive collections | DynamicData `SourceCache<T,TKey>` / `SourceList<T>` | Filtering, sorting, grouping, thread-safe binding to UI |
+| Git integration | Shell out to `git` CLI, parse porcelain output | No libgit2 dependency |
+| Process I/O | `System.Diagnostics.Process` wrapped in Rx observables | Output as `IObservable<string>`, status as `IObservable<ProcessStatus>` |
+| Config persistence | `System.Text.Json` with source generators | AOT-friendly, fast, no reflection |
+| Console rendering | Custom `AnsiParser` → styled `ConsoleLine` spans, `ItemsRepeater` for virtualized display | DynamicData `SourceList<ConsoleLine>` as ring buffer |
+| Views | `ReactiveWindow<TViewModel>` / `ReactiveUserControl<TViewModel>` | Type-safe bindings, ReactiveUI integration |
+| Thread marshalling | `ObserveOn(RxApp.MainThreadScheduler)` | NOT `Dispatcher.UIThread` — keep it Rx-idiomatic |
 
 ## Objectives
 
 ### Core Objective
-Deliver a fully functional v1 of Grove matching the design document and UI mockup.
+Deliver a fully functional v1 of Grove that matches the GOAL.md spec: worktree discovery, per-worktree command execution, live console output, system tray persistence, and settings management.
 
 ### Deliverables
-- [ ] Working Avalonia desktop app with two-panel layout
-- [ ] Git worktree discovery (repo mode + scan mode)
-- [ ] Per-worktree command execution with live console output
-- [ ] ANSI color rendering in console panel
-- [ ] Settings page (roots, presets, per-worktree overrides, appearance)
-- [ ] System tray integration with process persistence
-- [ ] Dark/light theme support
+- [x] Solution with two projects (`Grove`, `Grove.Core`) building on .NET 10
+- [x] Git worktree discovery (repo mode + scan mode)
+- [x] Sidebar with collapsible repo groups and worktree entries with status indicators
+- [x] Detail panel with header, command bar, preset chips, and live console
+- [x] Process management: run/stop/restart with Rx-based I/O streaming
+- [x] ANSI color parsing and virtualized console rendering
+- [x] JSON config persistence with per-worktree overrides and global presets
+- [x] Settings page (roots, presets, defaults, appearance)
+- [x] System tray integration with aggregate status icon
+- [x] Light/dark/system theme support
+- [x] Platform-aware shell execution (Windows `cmd /c`, Unix `sh -c`)
 
 ### Definition of Done
-- [ ] `dotnet build src/Grove` succeeds with no errors
-- [ ] `dotnet test` passes all unit tests (Core services)
-- [ ] App launches, discovers worktrees from a configured root, runs a command, shows live output
-- [ ] Closing window minimizes to tray; processes keep running
-- [ ] Settings persist across restarts
+- [x] `dotnet build src/Grove` succeeds with zero warnings (TreatWarningsAsErrors)
+- [x] App launches, discovers worktrees from a configured root, displays them in sidebar
+- [x] Selecting a worktree shows detail panel; typing a command and clicking Run starts the process
+- [x] Console output streams in real-time with ANSI colors rendered
+- [x] Stop/Restart buttons work; status dots update correctly
+- [x] Closing the window minimizes to tray; tray icon shows aggregate status
+- [x] Settings page allows adding/removing roots, editing presets, changing theme
+- [x] Config persists across app restarts
 
 ### Guardrails (Must NOT)
-- No libgit2 dependency — git CLI only
-- No ReactiveUI — CommunityToolkit.Mvvm only
-- No Electron/web — Avalonia native only
-- No filesystem watcher (v2 feature)
-- No CLI tool (v2 feature)
+- **No CommunityToolkit.Mvvm** — ReactiveUI only, everywhere
+- **No libgit2** — git CLI only
+- **No Electron/web** — Avalonia native only
+- **No filesystem watcher** — v2 feature
+- **No CLI tool** (`grove` command) — v2 feature
+- **No `[ObservableProperty]`** or `[RelayCommand]` attributes — these are CommunityToolkit patterns
+- **No `Dispatcher.UIThread`** — use `RxApp.MainThreadScheduler`
+- **No `ObservableCollection<T>`** directly — use DynamicData `SourceCache`/`SourceList` → `.Bind(out _readOnlyCollection)`
 
 ---
 
@@ -61,681 +77,2014 @@ Deliver a fully functional v1 of Grove matching the design document and UI mocku
 
 ### Phase 1: Project Scaffolding
 
-- [ ] 1.1 **Create solution and project structure** `[S]`
-  **What**: Create `Grove.sln` with two projects using dotnet CLI. `src/Grove` is the Avalonia MVVM app (from `avalonia.mvvm` template). `src/Grove.Core` is a plain class library for non-UI logic (models, services, interfaces).
+- [x] **1.1 Create solution and app project** `[M]`
+  **What**: Generate the Avalonia MVVM app from template with ReactiveUI, create the solution file, retarget to `net10.0`.
   **Files**:
-  - `Grove.sln`
-  - `src/Grove/Grove.csproj`
-  - `src/Grove.Core/Grove.Core.csproj`
-  **Commands**:
-  ```
-  dotnet new avalonia.mvvm -o src/Grove --name Grove --framework net10.0
-  dotnet new classlib -o src/Grove.Core --name Grove.Core --framework net10.0
+  - `Grove.sln` (new)
+  - `src/Grove/Grove.csproj` (new, from template, then modified)
+  - `src/Grove/App.axaml` (new, from template)
+  - `src/Grove/App.axaml.cs` (new, from template)
+  - `src/Grove/Program.cs` (new, from template)
+  - `src/Grove/ViewModels/MainWindowViewModel.cs` (new, from template — will be replaced later)
+  - `src/Grove/Views/MainWindow.axaml` (new, from template)
+  - `src/Grove/Views/MainWindow.axaml.cs` (new, from template)
+  **Key code**:
+  ```bash
+  # Generate from template into src/Grove
+  dotnet new avalonia.mvvm -n Grove -o src/Grove -m ReactiveUI --framework net9.0
+  # Create solution at repo root
   dotnet new sln -n Grove
-  dotnet sln add src/Grove src/Grove.Core
-  dotnet add src/Grove reference src/Grove.Core
+  dotnet sln add src/Grove/Grove.csproj
   ```
-  **Acceptance**: `dotnet build` succeeds. Solution has two projects with correct references.
+  Then manually edit `Grove.csproj` to retarget:
+  ```xml
+  <TargetFramework>net10.0</TargetFramework>
+  ```
+  **Acceptance**: `dotnet build src/Grove` succeeds; `dotnet run --project src/Grove` launches an empty Avalonia window.
 
-- [ ] 1.2 **Add NuGet packages** `[S]`
-  **What**: Add required NuGet packages to both projects.
+- [x] **1.2 Create Grove.Core class library** `[S]`
+  **What**: Create the core library project with no UI dependencies. This holds models, services, interfaces, and config logic.
   **Files**:
-  - `src/Grove/Grove.csproj` — add `CommunityToolkit.Mvvm`, `Microsoft.Extensions.DependencyInjection`
-  - `src/Grove.Core/Grove.Core.csproj` — add `CommunityToolkit.Mvvm`, `Microsoft.Extensions.DependencyInjection.Abstractions`
-  **Packages**:
-  - `CommunityToolkit.Mvvm` (8.4.0) — both projects
-  - `Microsoft.Extensions.DependencyInjection` (10.0.x) — Grove only
-  - `Microsoft.Extensions.DependencyInjection.Abstractions` — Grove.Core only
-  **Acceptance**: `dotnet restore` succeeds. Packages listed in csproj files.
-
-- [ ] 1.3 **Configure project settings** `[S]`
-  **What**: Set `<Nullable>enable</Nullable>`, `<ImplicitUsings>enable</ImplicitUsings>`, and enable CommunityToolkit.Mvvm source generators in both csproj files. Set `<RootNamespace>Grove.Core</RootNamespace>` for the Core project.
-  **Files**: `src/Grove/Grove.csproj`, `src/Grove.Core/Grove.Core.csproj`
-  **Acceptance**: Projects build with nullable enabled, source generators active.
-
-- [ ] 1.4 **Set up folder structure** `[S]`
-  **What**: Create the directory layout for both projects.
-  **Directories**:
+  - `src/Grove.Core/Grove.Core.csproj` (new)
+  **Key code**:
+  ```bash
+  dotnet new classlib -n Grove.Core -o src/Grove.Core --framework net10.0
+  dotnet sln add src/Grove.Core/Grove.Core.csproj
+  dotnet add src/Grove/Grove.csproj reference src/Grove.Core/Grove.Core.csproj
   ```
-  src/Grove/
-    Assets/          (icons, fonts)
-    Views/           (AXAML views)
-    ViewModels/      (VM classes)
-    Controls/        (custom Avalonia controls)
-    Converters/      (value converters)
-    Styles/          (AXAML style resources)
-  src/Grove.Core/
-    Models/          (data models)
-    Services/        (business logic services)
-    Interfaces/      (service interfaces)
+  Add to `Grove.Core.csproj`:
+  ```xml
+  <ItemGroup>
+    <PackageReference Include="System.Reactive" Version="6.*" />
+    <PackageReference Include="DynamicData" Version="9.*" />
+  </ItemGroup>
   ```
-  **Acceptance**: Directories exist. No build errors.
+  **Acceptance**: `dotnet build src/Grove.Core` succeeds; Grove app project references Core.
 
-- [ ] 1.5 **Clean up template boilerplate** `[S]`
-  **What**: Remove the default `avalonia.mvvm` template's sample ViewModel and View content. Keep `App.axaml`, `App.axaml.cs`, `Program.cs`, `MainWindow.axaml`, `MainWindow.axaml.cs`. Strip sample greeting text. Set window title to "Grove" and minimum size to 900x600.
-  **Files**: `src/Grove/MainWindow.axaml`, `src/Grove/ViewModels/MainWindowViewModel.cs`, `src/Grove/App.axaml.cs`
-  **Acceptance**: App launches with an empty window titled "Grove".
+- [x] **1.3 Add NuGet packages** `[S]`
+  **What**: Add all required NuGet packages to both projects.
+  **Files**:
+  - `src/Grove/Grove.csproj` (modify — add packages)
+  - `src/Grove.Core/Grove.Core.csproj` (modify — add packages)
+  **Key code**:
+  Grove app packages (some come from template, verify and add missing):
+  ```xml
+  <!-- src/Grove/Grove.csproj -->
+  <PackageReference Include="Avalonia" Version="11.2.*" />
+  <PackageReference Include="Avalonia.Desktop" Version="11.2.*" />
+  <PackageReference Include="Avalonia.Themes.Fluent" Version="11.2.*" />
+  <PackageReference Include="Avalonia.ReactiveUI" Version="11.2.*" />
+  <PackageReference Include="Avalonia.Fonts.Inter" Version="11.2.*" />
+  <PackageReference Include="Avalonia.Diagnostics" Version="11.2.*" Condition="'$(Configuration)' == 'Debug'" />
+  <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="10.*" />
+  <PackageReference Include="DynamicData" Version="9.*" />
+  ```
+  Grove.Core packages:
+  ```xml
+  <!-- src/Grove.Core/Grove.Core.csproj -->
+  <PackageReference Include="System.Reactive" Version="6.*" />
+  <PackageReference Include="DynamicData" Version="9.*" />
+  <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="10.*" />
+  ```
+  **Acceptance**: `dotnet restore` succeeds for both projects; `dotnet build` succeeds.
 
-- [ ] 1.6 **Set up DI container in App.axaml.cs** `[M]`
-  **What**: Configure `Microsoft.Extensions.DependencyInjection` in `App.axaml.cs`. Register all services and ViewModels. Create a static `IServiceProvider` accessible via `App.Services`. Resolve `MainWindowViewModel` from DI when creating `MainWindow`.
-  **Files**: `src/Grove/App.axaml.cs`
+- [x] **1.4 Configure DI container and wire into ReactiveUI** `[M]`
+  **What**: Set up `Microsoft.Extensions.DependencyInjection` as the app's DI container. Create a `Bootstrapper` class that builds the `ServiceProvider` and registers all services/viewmodels. Wire it so ReactiveUI's `Locator` can resolve view-viewmodel pairs (needed for `ViewLocator`).
+  **Files**:
+  - `src/Grove/Bootstrapper.cs` (new)
+  - `src/Grove/App.axaml.cs` (modify)
   **Key code**:
   ```csharp
-  public partial class App : Application
+  // Bootstrapper.cs
+  public static class Bootstrapper
   {
-      public static IServiceProvider Services { get; private set; } = null!;
-      
-      public override void OnFrameworkInitializationCompleted()
+      public static IServiceProvider Build()
       {
           var services = new ServiceCollection();
-          ConfigureServices(services);
-          Services = services.BuildServiceProvider();
-          // ... set MainWindow with resolved VM
+
+          // Core services
+          services.AddSingleton<IGitService, GitService>();
+          services.AddSingleton<IConfigService, ConfigService>();
+          services.AddSingleton<IProcessManager, ProcessManager>();
+          services.AddSingleton<IShellService, ShellService>();
+
+          // ViewModels
+          services.AddSingleton<MainWindowViewModel>();
+          services.AddTransient<SettingsViewModel>();
+
+          return services.BuildServiceProvider();
       }
   }
-  ```
-  **Acceptance**: App launches with DI. Services resolvable from `App.Services`.
 
-- [ ] 1.7 **Add app icon assets** `[S]`
-  **What**: Create a simple Grove tree icon (SVG or PNG) for the app window and tray. Place in `src/Grove/Assets/`. Add as `AvaloniaResource` in csproj. Can use a placeholder icon initially — a simple tree/leaf glyph.
-  **Files**: `src/Grove/Assets/grove-icon.ico`, `src/Grove/Assets/grove-icon.png`
-  **Acceptance**: Icon displays in window title bar.
+  // App.axaml.cs — in OnFrameworkInitializationCompleted
+  public override void OnFrameworkInitializationCompleted()
+  {
+      var provider = Bootstrapper.Build();
+
+      if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
+      {
+          desktop.MainWindow = new MainWindow
+          {
+              DataContext = provider.GetRequiredService<MainWindowViewModel>()
+          };
+      }
+      base.OnFrameworkInitializationCompleted();
+  }
+  ```
+  **Acceptance**: App launches with DI-resolved MainWindowViewModel; services are injectable.
+
+- [x] **1.5 Set up project structure and folders** `[S]`
+  **What**: Create the folder structure for both projects following conventions.
+  **Files**:
+  ```
+  src/Grove/
+    Assets/
+    Converters/
+    Styles/
+    Views/
+    ViewModels/
+  src/Grove.Core/
+    Models/
+    Services/
+    Services/Abstractions/
+  ```
+  **Key code**: N/A — just directory creation and placeholder files if needed.
+  **Acceptance**: Folder structure exists; solution builds.
+
+- [x] **1.6 Configure global build settings** `[S]`
+  **What**: Add `Directory.Build.props` at repo root for shared build settings: nullable enable, implicit usings, warnings as errors, and a `global.json` to pin SDK version.
+  **Files**:
+  - `Directory.Build.props` (new)
+  - `global.json` (new)
+  **Key code**:
+  ```xml
+  <!-- Directory.Build.props -->
+  <Project>
+    <PropertyGroup>
+      <Nullable>enable</Nullable>
+      <ImplicitUsings>enable</ImplicitUsings>
+      <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+      <WarningLevel>9999</WarningLevel>
+    </PropertyGroup>
+  </Project>
+  ```
+  ```json
+  // global.json
+  {
+    "sdk": {
+      "version": "10.0.200",
+      "rollForward": "latestFeature"
+    }
+  }
+  ```
+  **Acceptance**: `dotnet build` uses .NET 10 SDK; warnings are errors.
+
+- [x] **1.7 Add .gitignore and initial commit** `[S]`
+  **What**: Add a .NET-appropriate `.gitignore` (bin, obj, .vs, etc.) and verify the project compiles cleanly.
+  **Files**:
+  - `.gitignore` (new or update existing)
+  **Key code**:
+  ```bash
+  dotnet new gitignore
+  ```
+  **Acceptance**: `git status` is clean after build; no bin/obj tracked.
 
 ---
 
-### Phase 2: Core Services (No UI)
+### Phase 2: Core Services — No UI
 
-- [ ] 2.1 **Define data models** `[M]`
-  **What**: Create all core data model classes in `Grove.Core/Models/`. These are plain C# records/classes serializable with System.Text.Json.
-  **Files**: `src/Grove.Core/Models/`
-  - `RootConfig.cs` — `{ string Id, string Path, RootMode Mode }` where `RootMode` is `enum { Repo, Scan }`
-  - `WorktreeInfo.cs` — `{ string Path, string Branch, string HeadCommit, string? UpstreamBranch, string RootId, string RepoName }` (discovered from git, not persisted)
-  - `WorktreeConfig.cs` — `{ string? Command, Dictionary<string, string> Env }` (persisted per-worktree settings)
-  - `CommandPreset.cs` — `{ string Id, string Name, string Command }`
-  - `GroveConfig.cs` — `{ List<RootConfig> Roots, string? DefaultCommand, bool AutoStart, List<CommandPreset> Presets, Dictionary<string, WorktreeConfig> Worktrees, AppearanceConfig Appearance }`
-  - `AppearanceConfig.cs` — `{ ThemeMode Theme, int ConsoleFontSize }` where `ThemeMode` is `enum { Light, Dark, System }`
-  - `ProcessStatus.cs` — `enum { Idle, Starting, Running, Error }`
-  **Acceptance**: All models compile. JSON round-trip test passes.
-
-- [ ] 2.2 **Implement ConfigService** `[M]`
-  **What**: Service to load/save `GroveConfig` from JSON file. Handles platform-specific config paths (`%APPDATA%\grove\config.json` on Windows, `~/.config/grove/config.json` on Unix). Creates default config if file doesn't exist. Uses `System.Text.Json` with source generators for performance.
+- [x] **2.1 Define data models** `[M]`
+  **What**: Create all domain models in `Grove.Core/Models/`. These are plain C# records/classes matching the GOAL.md data model. Models are serialization-friendly (System.Text.Json).
   **Files**:
-  - `src/Grove.Core/Interfaces/IConfigService.cs`
-  - `src/Grove.Core/Services/ConfigService.cs`
-  - `src/Grove.Core/Services/GroveJsonContext.cs` (System.Text.Json source generator context)
-  **Interface**:
+  - `src/Grove.Core/Models/RootConfig.cs` (new)
+  - `src/Grove.Core/Models/RootMode.cs` (new — enum: Repo, Scan)
+  - `src/Grove.Core/Models/WorktreeInfo.cs` (new)
+  - `src/Grove.Core/Models/WorktreeConfig.cs` (new)
+  - `src/Grove.Core/Models/CommandPreset.cs` (new)
+  - `src/Grove.Core/Models/GroveConfig.cs` (new)
+  - `src/Grove.Core/Models/ProcessStatus.cs` (new — enum: Idle, Starting, Running, Error, Stopped)
+  - `src/Grove.Core/Models/AppTheme.cs` (new — enum: Light, Dark, System)
+  **Key code**:
   ```csharp
+  // RootConfig.cs
+  public sealed class RootConfig
+  {
+      public string Id { get; set; } = Guid.NewGuid().ToString("N")[..8];
+      public string Path { get; set; } = string.Empty;
+      public RootMode Mode { get; set; } = RootMode.Repo;
+  }
+
+  // WorktreeInfo.cs — parsed from git output, not persisted
+  public sealed record WorktreeInfo(
+      string Path,
+      string HeadCommit,
+      string BranchName,
+      bool IsBare,
+      string RepoRootPath  // which root repo this belongs to
+  );
+
+  // WorktreeConfig.cs — persisted per-worktree settings
+  public sealed class WorktreeConfig
+  {
+      public string? Command { get; set; }
+      public Dictionary<string, string> Env { get; set; } = new();
+  }
+
+  // GroveConfig.cs — top-level config file
+  public sealed class GroveConfig
+  {
+      public List<RootConfig> Roots { get; set; } = new();
+      public string DefaultCommand { get; set; } = string.Empty;
+      public bool AutoStart { get; set; }
+      public List<CommandPreset> Presets { get; set; } = new();
+      public Dictionary<string, WorktreeConfig> Worktrees { get; set; } = new();
+      public AppTheme Theme { get; set; } = AppTheme.Dark;
+      public int ConsoleFontSize { get; set; } = 13;
+  }
+
+  // CommandPreset.cs
+  public sealed class CommandPreset
+  {
+      public string Id { get; set; } = Guid.NewGuid().ToString("N")[..8];
+      public string Name { get; set; } = string.Empty;
+      public string Command { get; set; } = string.Empty;
+  }
+  ```
+  **Acceptance**: Models compile; can be serialized/deserialized with System.Text.Json.
+
+- [x] **2.2 Config service with JSON source generators** `[M]`
+  **What**: Implement `IConfigService` / `ConfigService` that loads/saves `GroveConfig` from the platform-appropriate config path. Use `System.Text.Json` source generators for AOT-friendly serialization. Config is loaded once at startup and saved on every mutation.
+  **Files**:
+  - `src/Grove.Core/Services/Abstractions/IConfigService.cs` (new)
+  - `src/Grove.Core/Services/ConfigService.cs` (new)
+  - `src/Grove.Core/Services/GroveJsonContext.cs` (new — source generator)
+  **Key code**:
+  ```csharp
+  // IConfigService.cs
   public interface IConfigService
   {
       GroveConfig Config { get; }
-      Task LoadAsync();
-      Task SaveAsync();
+      Task LoadAsync(CancellationToken ct = default);
+      Task SaveAsync(CancellationToken ct = default);
       string ConfigDirectory { get; }
   }
-  ```
-  **Key details**:
-  - Thread-safe save (use `SemaphoreSlim` to prevent concurrent writes)
-  - Auto-create directory if missing
-  - Debounced save (100ms) to avoid excessive disk writes when multiple settings change rapidly
-  **Acceptance**: Unit test: save config, reload, verify equality.
 
-- [ ] 2.3 **Implement GitService** `[L]`
-  **What**: Service to discover git repos and parse worktree information by shelling out to `git` CLI.
+  // GroveJsonContext.cs
+  [JsonSerializable(typeof(GroveConfig))]
+  [JsonSourceGenerationOptions(
+      WriteIndented = true,
+      PropertyNamingPolicy = JsonKnownNamingPolicy.CamelCase)]
+  public partial class GroveJsonContext : JsonSerializerContext { }
+
+  // ConfigService.cs
+  public sealed class ConfigService : IConfigService
+  {
+      public string ConfigDirectory { get; } = Path.Combine(
+          Environment.GetFolderPath(
+              OperatingSystem.IsWindows()
+                  ? Environment.SpecialFolder.ApplicationData
+                  : Environment.SpecialFolder.UserProfile),
+              OperatingSystem.IsWindows() ? "grove" : ".config/grove");
+
+      private string ConfigPath => Path.Combine(ConfigDirectory, "config.json");
+
+      public GroveConfig Config { get; private set; } = new();
+
+      public async Task LoadAsync(CancellationToken ct = default)
+      {
+          if (!File.Exists(ConfigPath)) return;
+          await using var stream = File.OpenRead(ConfigPath);
+          Config = await JsonSerializer.DeserializeAsync(
+              stream, GroveJsonContext.Default.GroveConfig, ct) ?? new();
+      }
+
+      public async Task SaveAsync(CancellationToken ct = default)
+      {
+          Directory.CreateDirectory(ConfigDirectory);
+          await using var stream = File.Create(ConfigPath);
+          await JsonSerializer.SerializeAsync(
+              stream, Config, GroveJsonContext.Default.GroveConfig, ct);
+      }
+  }
+  ```
+  **Acceptance**: Config round-trips: save → load → verify equality. Platform path is correct on Windows.
+
+- [x] **2.3 Shell service (platform-aware)** `[S]`
+  **What**: Implement `IShellService` that provides platform-appropriate shell invocation details and process start info creation.
   **Files**:
-  - `src/Grove.Core/Interfaces/IGitService.cs`
-  - `src/Grove.Core/Services/GitService.cs`
-  **Interface**:
+  - `src/Grove.Core/Services/Abstractions/IShellService.cs` (new)
+  - `src/Grove.Core/Services/ShellService.cs` (new)
+  **Key code**:
+  ```csharp
+  public interface IShellService
+  {
+      ProcessStartInfo CreateStartInfo(string command, string workingDirectory,
+          Dictionary<string, string>? envOverrides = null);
+  }
+
+  public sealed class ShellService : IShellService
+  {
+      public ProcessStartInfo CreateStartInfo(string command, string workingDirectory,
+          Dictionary<string, string>? envOverrides = null)
+      {
+          var isWindows = OperatingSystem.IsWindows();
+          var psi = new ProcessStartInfo
+          {
+              FileName = isWindows ? "cmd.exe" : "/bin/sh",
+              Arguments = isWindows ? $"/c {command}" : $"-c \"{command.Replace("\"", "\\\"")}\"",
+              WorkingDirectory = workingDirectory,
+              RedirectStandardOutput = true,
+              RedirectStandardError = true,
+              RedirectStandardInput = false,
+              UseShellExecute = false,
+              CreateNoWindow = true,
+          };
+
+          if (envOverrides is not null)
+          {
+              foreach (var (key, value) in envOverrides)
+                  psi.Environment[key] = value;
+          }
+
+          return psi;
+      }
+  }
+  ```
+  **Acceptance**: `CreateStartInfo("echo hello", "/tmp")` returns correct PSI for current platform.
+
+- [x] **2.4 Git service — worktree discovery** `[L]`
+  **What**: Implement `IGitService` / `GitService` that discovers worktrees. Supports both repo mode (run `git worktree list --porcelain` in a single repo) and scan mode (find all `.git` dirs under a parent, then list worktrees for each). Parse porcelain output into `WorktreeInfo` records.
+  **Files**:
+  - `src/Grove.Core/Services/Abstractions/IGitService.cs` (new)
+  - `src/Grove.Core/Services/GitService.cs` (new)
+  **Key code**:
   ```csharp
   public interface IGitService
   {
-      Task<List<WorktreeInfo>> GetWorktreesAsync(RootConfig root);
-      Task<bool> IsGitRepoAsync(string path);
-      Task<string?> GetUpstreamBranchAsync(string worktreePath);
-      Task CreateWorktreeAsync(string repoPath, string branchName, string? baseBranch = null);
+      Task<IReadOnlyList<WorktreeInfo>> GetWorktreesAsync(string repoPath, CancellationToken ct = default);
+      Task<IReadOnlyList<string>> DiscoverReposAsync(string scanPath, CancellationToken ct = default);
+      Task<WorktreeInfo?> AddWorktreeAsync(string repoPath, string branchName, string? path = null, CancellationToken ct = default);
+      Task<string?> GetUpstreamBranchAsync(string worktreePath, CancellationToken ct = default);
   }
-  ```
-  **Key implementation details**:
-  - **Repo mode**: Run `git worktree list --porcelain` in root path. Parse output blocks separated by blank lines. Extract `worktree <path>`, `HEAD <sha>`, `branch refs/heads/<name>`.
-  - **Scan mode**: Enumerate subdirectories of root. For each, check if `.git` exists (file or directory). If yes, run worktree list on it. Limit scan depth to 3 levels.
-  - Run `git rev-parse --abbrev-ref @{upstream}` per worktree to get upstream branch (may fail for untracked branches — handle gracefully).
-  - Derive `RepoName` from the repo's root directory name.
-  - Use `Process.Start` with `RedirectStandardOutput`, `CreateNoWindow = true`.
-  - Handle: bare repos (skip), detached HEAD (show commit SHA instead of branch), repos with no worktrees.
-  **Acceptance**: Unit test with mock git output. Integration test against a real git repo with worktrees.
 
-- [ ] 2.4 **Implement ProcessManager service** `[L]`
-  **What**: Core service that spawns, monitors, and controls child processes. One process per worktree path.
-  **Files**:
-  - `src/Grove.Core/Interfaces/IProcessManager.cs`
-  - `src/Grove.Core/Services/ProcessManager.cs`
-  - `src/Grove.Core/Models/ManagedProcess.cs`
-  **Interface**:
-  ```csharp
-  public interface IProcessManager
+  // GitService.cs — parsing git worktree list --porcelain
+  // Example porcelain output:
+  // worktree /path/to/main
+  // HEAD abc123
+  // branch refs/heads/main
+  //
+  // worktree /path/to/feature
+  // HEAD def456
+  // branch refs/heads/feat/auth
+  //
+  public sealed class GitService : IGitService
   {
-      IReadOnlyDictionary<string, ManagedProcess> Processes { get; }
-      ManagedProcess StartProcess(string worktreePath, string command, Dictionary<string, string>? envVars = null);
-      Task StopProcessAsync(string worktreePath, TimeSpan? gracePeriod = null);
-      Task RestartProcessAsync(string worktreePath, string command, Dictionary<string, string>? envVars = null);
-      void StopAll();
-      event Action<string, ProcessStatus>? StatusChanged;
-      event Action<string, string>? OutputReceived; // worktreePath, line
+      private readonly IShellService _shell;
+
+      public async Task<IReadOnlyList<WorktreeInfo>> GetWorktreesAsync(
+          string repoPath, CancellationToken ct = default)
+      {
+          var psi = new ProcessStartInfo("git", "worktree list --porcelain")
+          {
+              WorkingDirectory = repoPath,
+              RedirectStandardOutput = true,
+              UseShellExecute = false,
+              CreateNoWindow = true,
+          };
+          using var proc = Process.Start(psi)!;
+          var output = await proc.StandardOutput.ReadToEndAsync(ct);
+          await proc.WaitForExitAsync(ct);
+          return ParsePorcelainOutput(output, repoPath);
+      }
+
+      private static List<WorktreeInfo> ParsePorcelainOutput(string output, string repoRoot)
+      {
+          var results = new List<WorktreeInfo>();
+          var blocks = output.Split("\n\n", StringSplitOptions.RemoveEmptyEntries);
+          foreach (var block in blocks)
+          {
+              string? path = null, head = null, branch = null;
+              bool isBare = false;
+              foreach (var line in block.Split('\n'))
+              {
+                  if (line.StartsWith("worktree ")) path = line[9..];
+                  else if (line.StartsWith("HEAD ")) head = line[5..];
+                  else if (line.StartsWith("branch ")) branch = line[7..].Replace("refs/heads/", "");
+                  else if (line == "bare") isBare = true;
+                  else if (line == "detached") branch = "(detached)";
+              }
+              if (path is not null)
+                  results.Add(new WorktreeInfo(path, head ?? "", branch ?? "(unknown)", isBare, repoRoot));
+          }
+          return results;
+      }
+
+      public async Task<IReadOnlyList<string>> DiscoverReposAsync(
+          string scanPath, CancellationToken ct = default)
+      {
+          // Find directories containing .git (file or folder)
+          var repos = new List<string>();
+          foreach (var dir in Directory.EnumerateDirectories(scanPath, "*", SearchOption.AllDirectories))
+          {
+              ct.ThrowIfCancellationRequested();
+              if (Directory.Exists(Path.Combine(dir, ".git")) || File.Exists(Path.Combine(dir, ".git")))
+                  repos.Add(dir);
+          }
+          return repos;
+      }
   }
   ```
-  **`ManagedProcess` class**:
+  **Acceptance**: Given a real git repo with worktrees, `GetWorktreesAsync` returns correct `WorktreeInfo` list. `DiscoverReposAsync` finds repos under a scan folder.
+
+- [x] **2.5 Process runner with Rx observables** `[XL]`
+  **What**: Implement `IProcessRunner` — the heart of Grove. Wraps `System.Diagnostics.Process` with Rx. Exposes output as `IObservable<string>`, status as `IObservable<ProcessStatus>`. Supports start, stop (graceful + force-kill after timeout), and restart. One runner instance per worktree.
+  **Files**:
+  - `src/Grove.Core/Services/Abstractions/IProcessRunner.cs` (new)
+  - `src/Grove.Core/Services/ProcessRunner.cs` (new)
+  **Key code**:
   ```csharp
-  public class ManagedProcess
+  public interface IProcessRunner : IDisposable
   {
+      string WorktreePath { get; }
+      IObservable<string> Output { get; }
+      IObservable<ProcessStatus> Status { get; }
+      ProcessStatus CurrentStatus { get; }
+      DateTimeOffset? StartedAt { get; }
+
+      void Start(ProcessStartInfo psi);
+      Task StopAsync(TimeSpan? gracePeriod = null);
+      Task RestartAsync(ProcessStartInfo psi, TimeSpan? gracePeriod = null);
+  }
+
+  public sealed class ProcessRunner : IProcessRunner
+  {
+      private readonly Subject<string> _output = new();
+      private readonly BehaviorSubject<ProcessStatus> _status = new(ProcessStatus.Idle);
+      private Process? _process;
+      private readonly CompositeDisposable _processSubscriptions = new();
+
       public string WorktreePath { get; }
-      public string Command { get; }
-      public ProcessStatus Status { get; }
-      public int? ExitCode { get; }
-      public DateTime StartedAt { get; }
-      public Process? SystemProcess { get; }
+      public IObservable<string> Output => _output.AsObservable();
+      public IObservable<ProcessStatus> Status => _status.AsObservable();
+      public ProcessStatus CurrentStatus => _status.Value;
+      public DateTimeOffset? StartedAt { get; private set; }
+
+      public ProcessRunner(string worktreePath)
+      {
+          WorktreePath = worktreePath;
+      }
+
+      public void Start(ProcessStartInfo psi)
+      {
+          if (_process is not null) return; // prevent double-start
+
+          _status.OnNext(ProcessStatus.Starting);
+          StartedAt = DateTimeOffset.Now;
+
+          var process = new Process { StartInfo = psi, EnableRaisingEvents = true };
+
+          // Bridge process events to Rx
+          var stdout = Observable.FromEventPattern<DataReceivedEventHandler, DataReceivedEventArgs>(
+              h => process.OutputDataReceived += h,
+              h => process.OutputDataReceived -= h)
+              .Select(e => e.EventArgs.Data);
+
+          var stderr = Observable.FromEventPattern<DataReceivedEventHandler, DataReceivedEventArgs>(
+              h => process.ErrorDataReceived += h,
+              h => process.ErrorDataReceived -= h)
+              .Select(e => e.EventArgs.Data);
+
+          var exited = Observable.FromEventPattern(
+              h => process.Exited += h,
+              h => process.Exited -= h);
+
+          Observable.Merge(stdout, stderr)
+              .Where(line => line is not null)
+              .Subscribe(line => _output.OnNext(line!))
+              .DisposeWith(_processSubscriptions);
+
+          exited.Subscribe(_ =>
+          {
+              var exitCode = process.ExitCode;
+              _status.OnNext(exitCode == 0 ? ProcessStatus.Idle : ProcessStatus.Error);
+              CleanupProcess();
+          }).DisposeWith(_processSubscriptions);
+
+          process.Start();
+          process.BeginOutputReadLine();
+          process.BeginErrorReadLine();
+          _process = process;
+          _status.OnNext(ProcessStatus.Running);
+      }
+
+      public async Task StopAsync(TimeSpan? gracePeriod = null)
+      {
+          if (_process is null || _process.HasExited) return;
+          var grace = gracePeriod ?? TimeSpan.FromSeconds(5);
+
+          // Platform-aware graceful shutdown
+          if (OperatingSystem.IsWindows())
+          {
+              // taskkill sends CTRL_C_EVENT or terminates the process tree
+              try
+              {
+                  using var killer = Process.Start(new ProcessStartInfo("taskkill", $"/PID {_process.Id} /T")
+                  {
+                      CreateNoWindow = true, UseShellExecute = false
+                  });
+                  killer?.WaitForExit(1000);
+              }
+              catch { /* best effort */ }
+          }
+          else
+          {
+              _process.Kill(false); // SIGTERM
+          }
+
+          // Wait for graceful exit, then force-kill
+          var exited = await WaitForExitAsync(_process, grace);
+          if (!exited)
+          {
+              _process.Kill(true); // force kill entire process tree
+          }
+
+          _status.OnNext(ProcessStatus.Stopped);
+          CleanupProcess();
+      }
+
+      public async Task RestartAsync(ProcessStartInfo psi, TimeSpan? gracePeriod = null)
+      {
+          await StopAsync(gracePeriod);
+          Start(psi);
+      }
+
+      private void CleanupProcess()
+      {
+          _processSubscriptions.Clear();
+          _process?.Dispose();
+          _process = null;
+          StartedAt = null;
+      }
+
+      private static async Task<bool> WaitForExitAsync(Process process, TimeSpan timeout)
+      {
+          try { await process.WaitForExitAsync(new CancellationTokenSource(timeout).Token); return true; }
+          catch (OperationCanceledException) { return false; }
+      }
+
+      public void Dispose()
+      {
+          _process?.Kill(true);
+          _process?.Dispose();
+          _processSubscriptions.Dispose();
+          _output.Dispose();
+          _status.Dispose();
+      }
   }
   ```
-  **Key implementation details**:
-  - Platform shell: `cmd /c "<command>"` on Windows, `sh -c "<command>"` on Unix (use `RuntimeInformation.IsOSPlatform`).
-  - Set `WorkingDirectory` to worktree path.
-  - Merge env vars: copy `Environment.GetEnvironmentVariables()`, overlay per-worktree vars.
-  - `RedirectStandardOutput = true`, `RedirectStandardError = true`, `CreateNoWindow = true`.
-  - Subscribe to `OutputDataReceived` and `ErrorDataReceived` — fire `OutputReceived` event on each line.
-  - On `Exited`: set status to `Idle` (exit 0) or `Error` (non-zero). Fire `StatusChanged`.
-  - **Stop**: Send `Process.Kill(entireProcessTree: true)` on .NET 10. On Windows, can also try `Process.CloseMainWindow()` first. Use grace period (default 5s) before force kill.
-  - **Prevent double-start**: If process already running for worktree, throw or return existing.
-  - Thread safety: use `ConcurrentDictionary<string, ManagedProcess>`.
-  **Acceptance**: Unit test: start process (`ping localhost` or `echo hello`), verify output received, stop, verify status change.
+  **Acceptance**: Can start a long-running process (e.g. `ping localhost -t` on Windows), observe output lines via `Output` subscription, stop it, verify status transitions: Idle → Starting → Running → Stopped.
 
-- [ ] 2.5 **Implement RingBuffer for console output** `[S]`
-  **What**: A thread-safe ring buffer (circular buffer) that retains the last N lines (default 10,000). Used per worktree to store console output.
-  **Files**: `src/Grove.Core/Services/RingBuffer.cs`
-  **Interface**:
-  ```csharp
-  public class RingBuffer<T>
-  {
-      public RingBuffer(int capacity = 10_000);
-      public void Add(T item);
-      public void Clear();
-      public int Count { get; }
-      public IReadOnlyList<T> ToList(); // snapshot, oldest first
-      public T this[int index] { get; }
-  }
-  ```
-  **Implementation**: Array-backed with head/tail pointers. Lock-free reads if possible, or use `lock` for simplicity.
-  **Acceptance**: Unit test: add 15K items to 10K buffer, verify count=10K, oldest items evicted.
-
-- [ ] 2.6 **Implement ConsoleOutputManager** `[M]`
-  **What**: Manages per-worktree console output buffers. Listens to `ProcessManager.OutputReceived`, routes lines to the correct `RingBuffer`, and raises events for the UI to consume.
+- [x] **2.6 Process manager (orchestrator)** `[L]`
+  **What**: Implement `IProcessManager` — manages the collection of `IProcessRunner` instances. One runner per worktree path. Provides methods to start/stop/restart by worktree path. Exposes aggregate status for tray icon. Uses DynamicData `SourceCache` internally.
   **Files**:
-  - `src/Grove.Core/Interfaces/IConsoleOutputManager.cs`
-  - `src/Grove.Core/Services/ConsoleOutputManager.cs`
-  **Interface**:
+  - `src/Grove.Core/Services/Abstractions/IProcessManager.cs` (new)
+  - `src/Grove.Core/Services/ProcessManager.cs` (new)
+  **Key code**:
   ```csharp
-  public interface IConsoleOutputManager
+  public interface IProcessManager : IDisposable
   {
-      RingBuffer<string> GetBuffer(string worktreePath);
-      void Clear(string worktreePath);
-      event Action<string, string>? LineAdded; // worktreePath, line
+      IObservable<IChangeSet<IProcessRunner, string>> Connect(); // DynamicData
+      IProcessRunner GetOrCreate(string worktreePath);
+      Task StopAllAsync();
+      IObservable<ProcessStatus> AggregateStatus { get; }
+  }
+
+  public sealed class ProcessManager : IProcessManager
+  {
+      private readonly SourceCache<IProcessRunner, string> _runners = new(r => r.WorktreePath);
+
+      public IObservable<IChangeSet<IProcessRunner, string>> Connect() => _runners.Connect();
+
+      public IProcessRunner GetOrCreate(string worktreePath)
+      {
+          var existing = _runners.Lookup(worktreePath);
+          if (existing.HasValue) return existing.Value;
+
+          var runner = new ProcessRunner(worktreePath);
+          _runners.AddOrUpdate(runner);
+          return runner;
+      }
+
+      public IObservable<ProcessStatus> AggregateStatus =>
+          _runners.Connect()
+              .AutoRefreshOnObservable(r => r.Status)
+              .ToCollection()
+              .Select(runners =>
+              {
+                  if (runners.Any(r => r.CurrentStatus == ProcessStatus.Error)) return ProcessStatus.Error;
+                  if (runners.Any(r => r.CurrentStatus == ProcessStatus.Running)) return ProcessStatus.Running;
+                  return ProcessStatus.Idle;
+              });
+
+      public async Task StopAllAsync()
+      {
+          var tasks = _runners.Items.Select(r => r.StopAsync());
+          await Task.WhenAll(tasks);
+      }
+
+      public void Dispose()
+      {
+          foreach (var runner in _runners.Items) runner.Dispose();
+          _runners.Dispose();
+      }
   }
   ```
-  **Acceptance**: Unit test: simulate output, verify buffer contents and events.
+  **Acceptance**: Can create runners for multiple worktrees, start processes, observe aggregate status changes.
 
-- [ ] 2.7 **Implement ANSI parser** `[L]`
-  **What**: Parse ANSI escape sequences (SGR codes) from console output lines and produce structured data that the UI can render as colored text. This is the most technically challenging piece.
-  **Files**: `src/Grove.Core/Services/AnsiParser.cs`, `src/Grove.Core/Models/AnsiSpan.cs`
-  **`AnsiSpan` model**:
-  ```csharp
-  public record AnsiSpan(string Text, AnsiColor? Foreground, AnsiColor? Background, bool Bold, bool Italic, bool Underline);
-  public record AnsiColor(byte R, byte G, byte B);
-  ```
-  **Parser behavior**:
-  - Input: raw string with ANSI escape codes (e.g., `\x1b[32mHello\x1b[0m`)
-  - Output: `List<AnsiSpan>` — segments of text with associated styling
-  - Support SGR codes: reset (0), bold (1), italic (3), underline (4), foreground colors (30-37, 90-97), background colors (40-47, 100-107), 256-color (38;5;N), true-color (38;2;R;G;B)
-  - Strip unsupported escape sequences (cursor movement, etc.) — just remove them
-  - Use a state machine: track current style, emit span when style changes or text ends
-  **Standard ANSI color palette** (map codes 30-37 to RGB):
-  - 30=Black(#1e1e1e), 31=Red(#f44747), 32=Green(#6a9955), 33=Yellow(#dcdcaa), 34=Blue(#569cd6), 35=Magenta(#c586c0), 36=Cyan(#4ec9b0), 37=White(#d4d4d4)
-  - 90-97 = bright variants
-  **Acceptance**: Unit test: parse `"\x1b[1;32mOK\x1b[0m done"` → `[AnsiSpan("OK", Green, Bold), AnsiSpan(" done", null, false)]`.
-
-- [ ] 2.8 **Create test project** `[S]`
-  **What**: Create `tests/Grove.Core.Tests` xUnit project with references to `Grove.Core`.
+- [x] **2.7 ANSI parser** `[L]`
+  **What**: Implement `AnsiParser` that converts raw console output lines (containing ANSI escape codes) into structured `ConsoleLine` / `ConsoleSpan` objects with foreground/background color and style info. Supports SGR (Select Graphic Rendition) codes for colors (16-color, 256-color, and basic true-color).
   **Files**:
-  - `tests/Grove.Core.Tests/Grove.Core.Tests.csproj`
-  - `tests/Grove.Core.Tests/Services/ConfigServiceTests.cs`
-  - `tests/Grove.Core.Tests/Services/RingBufferTests.cs`
-  - `tests/Grove.Core.Tests/Services/AnsiParserTests.cs`
-  - `tests/Grove.Core.Tests/Services/GitServiceTests.cs`
-  **Acceptance**: `dotnet test` runs and passes.
+  - `src/Grove.Core/Models/ConsoleLine.cs` (new)
+  - `src/Grove.Core/Models/ConsoleSpan.cs` (new)
+  - `src/Grove.Core/Models/AnsiColor.cs` (new)
+  - `src/Grove.Core/Services/AnsiParser.cs` (new)
+  **Key code**:
+  ```csharp
+  // ConsoleSpan.cs
+  public sealed record ConsoleSpan(
+      string Text,
+      AnsiColor? Foreground = null,
+      AnsiColor? Background = null,
+      bool IsBold = false,
+      bool IsItalic = false,
+      bool IsUnderline = false
+  );
+
+  // ConsoleLine.cs
+  public sealed class ConsoleLine
+  {
+      public DateTimeOffset Timestamp { get; init; } = DateTimeOffset.Now;
+      public IReadOnlyList<ConsoleSpan> Spans { get; init; } = [];
+      public string RawText { get; init; } = string.Empty;
+  }
+
+  // AnsiColor.cs
+  public readonly record struct AnsiColor(byte R, byte G, byte B)
+  {
+      // Standard 16 ANSI colors as static fields
+      public static readonly AnsiColor Black = new(0, 0, 0);
+      public static readonly AnsiColor Red = new(205, 49, 49);
+      public static readonly AnsiColor Green = new(13, 188, 121);
+      public static readonly AnsiColor Yellow = new(229, 229, 16);
+      public static readonly AnsiColor Blue = new(36, 114, 200);
+      public static readonly AnsiColor Magenta = new(188, 63, 188);
+      public static readonly AnsiColor Cyan = new(17, 168, 205);
+      public static readonly AnsiColor White = new(229, 229, 229);
+      // ... bright variants
+  }
+
+  // AnsiParser.cs
+  public sealed class AnsiParser
+  {
+      private AnsiColor? _currentFg;
+      private AnsiColor? _currentBg;
+      private bool _bold, _italic, _underline;
+
+      public ConsoleLine Parse(string rawLine)
+      {
+          var spans = new List<ConsoleSpan>();
+          // Regex to match ESC[...m sequences
+          var regex = new Regex(@"\x1B\[([0-9;]*)m");
+          int lastIndex = 0;
+
+          foreach (Match match in regex.Matches(rawLine))
+          {
+              // Add text before this escape sequence
+              if (match.Index > lastIndex)
+              {
+                  var text = rawLine[lastIndex..match.Index];
+                  spans.Add(new ConsoleSpan(text, _currentFg, _currentBg, _bold, _italic, _underline));
+              }
+              // Process SGR codes
+              ProcessSgrCodes(match.Groups[1].Value);
+              lastIndex = match.Index + match.Length;
+          }
+
+          // Remaining text
+          if (lastIndex < rawLine.Length)
+          {
+              spans.Add(new ConsoleSpan(rawLine[lastIndex..], _currentFg, _currentBg, _bold, _italic, _underline));
+          }
+
+          return new ConsoleLine { Spans = spans, RawText = rawLine };
+      }
+
+      private void ProcessSgrCodes(string codes) { /* parse ; separated codes, update state */ }
+  }
+  ```
+  **Acceptance**: Parsing `"\x1B[31mError:\x1B[0m something failed"` produces two spans: red "Error:" and default "something failed".
+
+- [x] **2.8 Console buffer (DynamicData ring buffer)** `[M]`
+  **What**: Implement `ConsoleBuffer` — a DynamicData `SourceList<ConsoleLine>` that acts as a ring buffer (max 10,000 lines). Exposes a `Connect()` for the UI to bind to. Accepts `IObservable<string>` from a `ProcessRunner` and parses each line through `AnsiParser`.
+  **Files**:
+  - `src/Grove.Core/Services/ConsoleBuffer.cs` (new)
+  **Key code**:
+  ```csharp
+  public sealed class ConsoleBuffer : IDisposable
+  {
+      private readonly SourceList<ConsoleLine> _lines = new();
+      private readonly AnsiParser _parser = new();
+      private readonly int _maxLines;
+      private IDisposable? _subscription;
+
+      public ConsoleBuffer(int maxLines = 10_000)
+      {
+          _maxLines = maxLines;
+      }
+
+      public IObservable<IChangeSet<ConsoleLine>> Connect() => _lines.Connect();
+
+      public void Attach(IObservable<string> outputStream)
+      {
+          _subscription?.Dispose();
+          _subscription = outputStream.Subscribe(line =>
+          {
+              var parsed = _parser.Parse(line);
+              _lines.Edit(list =>
+              {
+                  list.Add(parsed);
+                  while (list.Count > _maxLines)
+                      list.RemoveAt(0);
+              });
+          });
+      }
+
+      public void Clear() => _lines.Clear();
+
+      public void Detach()
+      {
+          _subscription?.Dispose();
+          _subscription = null;
+      }
+
+      public void Dispose()
+      {
+          _subscription?.Dispose();
+          _lines.Dispose();
+      }
+  }
+  ```
+  **Acceptance**: Attach to a mock `IObservable<string>` that emits 15,000 lines; verify buffer contains exactly 10,000 lines (oldest trimmed). `Connect()` emits change sets.
 
 ---
 
 ### Phase 3: MVVM ViewModels
 
-- [ ] 3.1 **Create MainWindowViewModel** `[M]`
-  **What**: Top-level ViewModel that orchestrates the sidebar and detail panel. Holds the selected worktree, manages navigation between worktree detail and settings views.
-  **Files**: `src/Grove/ViewModels/MainWindowViewModel.cs`
-  **Properties/Commands**:
-  ```csharp
-  [ObservableProperty] private ObservableCollection<RootViewModel> _roots;
-  [ObservableProperty] private WorktreeViewModel? _selectedWorktree;
-  [ObservableProperty] private object? _currentDetailView; // WorktreeDetailVM or SettingsVM
-  [ObservableProperty] private bool _isSettingsOpen;
-  
-  [RelayCommand] private async Task RefreshAsync();
-  [RelayCommand] private void OpenSettings();
-  [RelayCommand] private void CloseSettings();
-  [RelayCommand] private async Task AddRootAsync(); // opens folder picker
-  ```
-  **Behavior**:
-  - On construction/refresh: call `IGitService.GetWorktreesAsync` for each root in config, build `RootViewModel` tree.
-  - When `SelectedWorktree` changes, update `CurrentDetailView` to a `WorktreeDetailViewModel` for that worktree.
-  - Expose aggregate process status for tray icon (computed from all `ManagedProcess` statuses).
-  **Acceptance**: ViewModel constructs, refresh populates roots collection.
-
-- [ ] 3.2 **Create RootViewModel** `[S]`
-  **What**: Represents a root in the sidebar. Contains nested worktree items.
-  **Files**: `src/Grove/ViewModels/RootViewModel.cs`
-  **Properties**:
-  ```csharp
-  public string Name { get; }           // derived from folder name
-  public string Path { get; }
-  public RootMode Mode { get; }
-  public ObservableCollection<WorktreeViewModel> Worktrees { get; }
-  [ObservableProperty] private bool _isExpanded = true;
-  ```
-  **Acceptance**: Displays root name with collapsible worktree children.
-
-- [ ] 3.3 **Create WorktreeViewModel** `[M]`
-  **What**: Represents a single worktree entry in the sidebar. Tracks process status for the status indicator dot.
-  **Files**: `src/Grove/ViewModels/WorktreeViewModel.cs`
-  **Properties**:
-  ```csharp
-  public WorktreeInfo Info { get; }
-  public string BranchName => Info.Branch;
-  public string ShortPath { get; }      // abbreviated path
-  [ObservableProperty] private ProcessStatus _status = ProcessStatus.Idle;
-  ```
-  **Behavior**:
-  - Subscribe to `IProcessManager.StatusChanged` for this worktree's path.
-  - Update `Status` property on status changes (must dispatch to UI thread).
-  **Acceptance**: Status dot updates when process starts/stops.
-
-- [ ] 3.4 **Create WorktreeDetailViewModel** `[L]`
-  **What**: The main detail panel ViewModel. Shows header info, command bar, presets, and console output for the selected worktree.
-  **Files**: `src/Grove/ViewModels/WorktreeDetailViewModel.cs`
-  **Properties/Commands**:
-  ```csharp
-  // Header
-  public string BranchName { get; }
-  public string FullPath { get; }
-  public string? UpstreamBranch { get; }
-  [ObservableProperty] private ProcessStatus _status;
-  [ObservableProperty] private DateTime? _startedAt;
-  
-  // Command bar
-  [ObservableProperty] private string _command = "";
-  public ObservableCollection<CommandPreset> Presets { get; }
-  
-  // Console
-  public ObservableCollection<ConsoleLine> ConsoleLines { get; }
-  
-  // Commands
-  [RelayCommand] private async Task RunAsync();
-  [RelayCommand] private async Task StopAsync();
-  [RelayCommand] private async Task RestartAsync();
-  [RelayCommand] private void ClearConsole();
-  [RelayCommand] private void LoadPreset(CommandPreset preset);
-  [RelayCommand] private void CopyConsoleOutput();
-  
-  // Computed
-  public bool CanRun => Status == ProcessStatus.Idle || Status == ProcessStatus.Error;
-  public bool CanStop => Status == ProcessStatus.Running || Status == ProcessStatus.Starting;
-  public string StatusText => Status.ToString().ToLower();
-  public string ElapsedTime { get; } // "started Xm ago" — updated via timer
-  ```
-  **`ConsoleLine` model** (UI-specific, in Grove project):
-  ```csharp
-  public record ConsoleLine(List<AnsiSpan> Spans, DateTime Timestamp);
-  ```
-  **Behavior**:
-  - On construction: load existing buffer from `IConsoleOutputManager`, parse each line through `AnsiParser`.
-  - Subscribe to `IConsoleOutputManager.LineAdded` — parse and append to `ConsoleLines` (dispatch to UI thread).
-  - Load command from config (per-worktree override or global default).
-  - Save command to config on change (debounced).
-  - Elapsed time: use a `DispatcherTimer` (1-minute interval) to update "started Xm ago" text.
-  **Acceptance**: Run command → console lines appear. Stop → status updates. Presets load into command bar.
-
-- [ ] 3.5 **Create SettingsViewModel** `[M]`
-  **What**: ViewModel for the settings page. Manages roots, presets, per-worktree overrides, and appearance.
-  **Files**: `src/Grove/ViewModels/SettingsViewModel.cs`
-  **Properties/Commands**:
-  ```csharp
-  // Global defaults
-  [ObservableProperty] private string _defaultCommand;
-  [ObservableProperty] private bool _autoStart;
-  
-  // Roots
-  public ObservableCollection<RootConfigViewModel> Roots { get; }
-  [RelayCommand] private async Task AddRootAsync();
-  [RelayCommand] private void RemoveRoot(RootConfigViewModel root);
-  
-  // Presets
-  public ObservableCollection<PresetViewModel> Presets { get; }
-  [RelayCommand] private void AddPreset();
-  [RelayCommand] private void RemovePreset(PresetViewModel preset);
-  
-  // Per-worktree overrides
-  public ObservableCollection<WorktreeOverrideViewModel> WorktreeOverrides { get; }
-  
-  // Appearance
-  [ObservableProperty] private ThemeMode _theme;
-  [ObservableProperty] private int _consoleFontSize;
-  ```
-  **Behavior**:
-  - All changes auto-save to config (debounced via `ConfigService`).
-  - Adding a root opens a folder picker dialog (`IStorageProvider.OpenFolderPickerAsync`).
-  - Root mode toggle: repo vs scan.
-  **Acceptance**: Add/remove roots persists. Theme change applies immediately.
-
-- [ ] 3.6 **Create supporting sub-ViewModels** `[S]`
-  **What**: Small ViewModels for settings sub-items.
+- [x] **3.1 MainWindowViewModel — app shell** `[L]`
+  **What**: The root ViewModel. Holds the sidebar data (roots + worktrees), the currently selected worktree, and navigation state (detail vs settings). Uses DynamicData `SourceCache` for roots and worktrees. Orchestrates loading config and discovering worktrees on startup.
   **Files**:
-  - `src/Grove/ViewModels/RootConfigViewModel.cs` — wraps `RootConfig` with editable properties
-  - `src/Grove/ViewModels/PresetViewModel.cs` — wraps `CommandPreset` with editable name/command
-  - `src/Grove/ViewModels/WorktreeOverrideViewModel.cs` — wraps per-worktree config (path, command, env vars table)
-  - `src/Grove/ViewModels/EnvVarViewModel.cs` — single key-value pair for env var editing
-  **Acceptance**: All compile and bind correctly in settings view.
+  - `src/Grove/ViewModels/MainWindowViewModel.cs` (rewrite from template)
+  **Key code**:
+  ```csharp
+  public class MainWindowViewModel : ReactiveObject, IActivatableViewModel
+  {
+      public ViewModelActivator Activator { get; } = new();
 
-- [ ] 3.7 **Create ViewLocator / DataTemplate mappings** `[S]`
-  **What**: Set up Avalonia `DataTemplate` mappings so that when `CurrentDetailView` is a `WorktreeDetailViewModel`, the `WorktreeDetailView` UserControl is shown, and when it's a `SettingsViewModel`, the `SettingsView` is shown. Use Avalonia's `ViewLocator` pattern or explicit `DataTemplate` declarations in `App.axaml`.
-  **Files**: `src/Grove/App.axaml` (DataTemplates section), or `src/Grove/ViewLocator.cs`
-  **Acceptance**: Switching `CurrentDetailView` type swaps the displayed view.
+      private readonly IGitService _git;
+      private readonly IConfigService _config;
+      private readonly IProcessManager _processManager;
+      private readonly IShellService _shell;
+
+      // Sidebar data
+      private readonly SourceCache<RootViewModel, string> _roots = new(r => r.Id);
+      private readonly ReadOnlyObservableCollection<RootViewModel> _rootList;
+      public ReadOnlyObservableCollection<RootViewModel> Roots => _rootList;
+
+      // Selection
+      private WorktreeViewModel? _selectedWorktree;
+      public WorktreeViewModel? SelectedWorktree
+      {
+          get => _selectedWorktree;
+          set => this.RaiseAndSetIfChanged(ref _selectedWorktree, value);
+      }
+
+      // Detail panel — derived from selection
+      private readonly ObservableAsPropertyHelper<WorktreeDetailViewModel?> _detail;
+      public WorktreeDetailViewModel? Detail => _detail.Value;
+
+      // Navigation
+      private bool _isSettingsOpen;
+      public bool IsSettingsOpen
+      {
+          get => _isSettingsOpen;
+          set => this.RaiseAndSetIfChanged(ref _isSettingsOpen, value);
+      }
+
+      // Commands
+      public ReactiveCommand<Unit, Unit> RefreshCommand { get; }
+      public ReactiveCommand<Unit, Unit> AddRootCommand { get; }
+      public ReactiveCommand<Unit, Unit> OpenSettingsCommand { get; }
+
+      public MainWindowViewModel(IGitService git, IConfigService config,
+          IProcessManager processManager, IShellService shell)
+      {
+          _git = git;
+          _config = config;
+          _processManager = processManager;
+          _shell = shell;
+
+          // Bind roots to sorted list
+          _roots.Connect()
+              .SortBy(r => r.Name)
+              .ObserveOn(RxApp.MainThreadScheduler)
+              .Bind(out _rootList)
+              .Subscribe();
+
+          // Detail VM derived from selection
+          _detail = this.WhenAnyValue(x => x.SelectedWorktree)
+              .Select(wt => wt is null ? null :
+                  new WorktreeDetailViewModel(wt.Info, _processManager, _shell, _config))
+              .ToProperty(this, x => x.Detail);
+
+          // Commands
+          RefreshCommand = ReactiveCommand.CreateFromTask(RefreshAllAsync);
+          AddRootCommand = ReactiveCommand.CreateFromTask(AddRootAsync);
+          OpenSettingsCommand = ReactiveCommand.Create(() => { IsSettingsOpen = !IsSettingsOpen; });
+
+          // Load on activation
+          this.WhenActivated(disposables =>
+          {
+              RefreshCommand.Execute().Subscribe().DisposeWith(disposables);
+          });
+      }
+
+      private async Task RefreshAllAsync(CancellationToken ct)
+      {
+          await _config.LoadAsync(ct);
+          _roots.Edit(cache =>
+          {
+              cache.Clear();
+              // Populate from config — actual worktree discovery happens in RootViewModel
+          });
+          foreach (var rootConfig in _config.Config.Roots)
+          {
+              var rootVm = new RootViewModel(rootConfig, _git);
+              _roots.AddOrUpdate(rootVm);
+              await rootVm.LoadWorktreesCommand.Execute();
+          }
+      }
+  }
+  ```
+  **Acceptance**: ViewModel loads config, populates roots, selecting a worktree creates a detail VM.
+
+- [x] **3.2 RootViewModel — repo group in sidebar** `[M]`
+  **What**: Represents a single root (repo or scan folder) in the sidebar. Contains a DynamicData collection of `WorktreeViewModel` children. Handles worktree discovery for its root. Supports expand/collapse.
+  **Files**:
+  - `src/Grove/ViewModels/RootViewModel.cs` (new)
+  **Key code**:
+  ```csharp
+  public class RootViewModel : ReactiveObject
+  {
+      private readonly RootConfig _rootConfig;
+      private readonly IGitService _git;
+
+      public string Id => _rootConfig.Id;
+      public string Name => Path.GetFileName(_rootConfig.Path.TrimEnd(Path.DirectorySeparatorChar));
+      public string Path => _rootConfig.Path;
+      public RootMode Mode => _rootConfig.Mode;
+
+      private bool _isExpanded = true;
+      public bool IsExpanded
+      {
+          get => _isExpanded;
+          set => this.RaiseAndSetIfChanged(ref _isExpanded, value);
+      }
+
+      private readonly SourceList<WorktreeViewModel> _worktrees = new();
+      private readonly ReadOnlyObservableCollection<WorktreeViewModel> _worktreeList;
+      public ReadOnlyObservableCollection<WorktreeViewModel> Worktrees => _worktreeList;
+
+      public ReactiveCommand<Unit, Unit> LoadWorktreesCommand { get; }
+
+      private readonly ObservableAsPropertyHelper<bool> _isLoading;
+      public bool IsLoading => _isLoading.Value;
+
+      public RootViewModel(RootConfig rootConfig, IGitService git)
+      {
+          _rootConfig = rootConfig;
+          _git = git;
+
+          _worktrees.Connect()
+              .ObserveOn(RxApp.MainThreadScheduler)
+              .Bind(out _worktreeList)
+              .Subscribe();
+
+          LoadWorktreesCommand = ReactiveCommand.CreateFromTask(LoadWorktreesAsync);
+
+          _isLoading = LoadWorktreesCommand.IsExecuting
+              .ToProperty(this, x => x.IsLoading);
+      }
+
+      private async Task LoadWorktreesAsync(CancellationToken ct)
+      {
+          var repoPaths = _rootConfig.Mode == RootMode.Scan
+              ? await _git.DiscoverReposAsync(_rootConfig.Path, ct)
+              : new[] { _rootConfig.Path };
+
+          var allWorktrees = new List<WorktreeViewModel>();
+          foreach (var repoPath in repoPaths)
+          {
+              var infos = await _git.GetWorktreesAsync(repoPath, ct);
+              allWorktrees.AddRange(infos.Select(i => new WorktreeViewModel(i)));
+          }
+
+          _worktrees.Edit(list =>
+          {
+              list.Clear();
+              list.AddRange(allWorktrees);
+          });
+      }
+  }
+  ```
+  **Acceptance**: RootViewModel discovers worktrees and exposes them as a bound collection.
+
+- [x] **3.3 WorktreeViewModel — sidebar entry** `[M]`
+  **What**: Represents a single worktree entry in the sidebar. Shows branch name, short path, and status dot. Status is derived from the process runner's status observable (if a process exists for this worktree).
+  **Files**:
+  - `src/Grove/ViewModels/WorktreeViewModel.cs` (new)
+  **Key code**:
+  ```csharp
+  public class WorktreeViewModel : ReactiveObject
+  {
+      public WorktreeInfo Info { get; }
+
+      public string BranchName => Info.BranchName;
+      public string ShortPath => ShortenPath(Info.Path);
+
+      private ProcessStatus _status = ProcessStatus.Idle;
+      public ProcessStatus Status
+      {
+          get => _status;
+          set => this.RaiseAndSetIfChanged(ref _status, value);
+      }
+
+      // OAPH for status indicator color
+      private readonly ObservableAsPropertyHelper<string> _statusColor;
+      public string StatusColor => _statusColor.Value;
+
+      public WorktreeViewModel(WorktreeInfo info)
+      {
+          Info = info;
+
+          _statusColor = this.WhenAnyValue(x => x.Status)
+              .Select(s => s switch
+              {
+                  ProcessStatus.Running => "#4EC9B0",  // green
+                  ProcessStatus.Error => "#F44747",     // red
+                  ProcessStatus.Starting => "#DCDCAA",  // amber
+                  _ => "#808080"                         // grey
+              })
+              .ToProperty(this, x => x.StatusColor);
+      }
+
+      public void BindToRunner(IProcessRunner runner)
+      {
+          runner.Status
+              .ObserveOn(RxApp.MainThreadScheduler)
+              .Subscribe(s => Status = s);
+      }
+
+      private static string ShortenPath(string path) =>
+          path.Replace(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "~");
+  }
+  ```
+  **Acceptance**: Status changes on the runner are reflected in the ViewModel's Status and StatusColor properties.
+
+- [x] **3.4 WorktreeDetailViewModel — detail panel** `[XL]`
+  **What**: The main detail panel ViewModel. Contains header info, command bar state, preset management, and console buffer. Orchestrates process lifecycle (run/stop/restart). This is the most complex ViewModel.
+  **Files**:
+  - `src/Grove/ViewModels/WorktreeDetailViewModel.cs` (new)
+  **Key code**:
+  ```csharp
+  public class WorktreeDetailViewModel : ReactiveObject, IDisposable
+  {
+      private readonly WorktreeInfo _info;
+      private readonly IProcessManager _processManager;
+      private readonly IShellService _shell;
+      private readonly IConfigService _config;
+      private readonly ConsoleBuffer _consoleBuffer = new();
+      private readonly CompositeDisposable _disposables = new();
+
+      // Header
+      public string BranchName => _info.BranchName;
+      public string FullPath => _info.Path;
+
+      private string _upstreamBranch = string.Empty;
+      public string UpstreamBranch
+      {
+          get => _upstreamBranch;
+          set => this.RaiseAndSetIfChanged(ref _upstreamBranch, value);
+      }
+
+      // Status — derived from process runner
+      private readonly ObservableAsPropertyHelper<ProcessStatus> _status;
+      public ProcessStatus Status => _status.Value;
+
+      private readonly ObservableAsPropertyHelper<string> _statusText;
+      public string StatusText => _statusText.Value;
+
+      private readonly ObservableAsPropertyHelper<bool> _isRunning;
+      public bool IsRunning => _isRunning.Value;
+
+      // Command bar
+      private string _command = string.Empty;
+      public string Command
+      {
+          get => _command;
+          set => this.RaiseAndSetIfChanged(ref _command, value);
+      }
+
+      // Console
+      private readonly ReadOnlyObservableCollection<ConsoleLine> _consoleLines;
+      public ReadOnlyObservableCollection<ConsoleLine> ConsoleLines => _consoleLines;
+
+      // Presets
+      private readonly ReadOnlyObservableCollection<CommandPreset> _presets;
+      public ReadOnlyObservableCollection<CommandPreset> Presets => _presets;
+
+      // Elapsed time
+      private readonly ObservableAsPropertyHelper<string?> _elapsed;
+      public string? Elapsed => _elapsed.Value;
+
+      // Commands
+      public ReactiveCommand<Unit, Unit> RunCommand { get; }
+      public ReactiveCommand<Unit, Unit> StopCommand { get; }
+      public ReactiveCommand<Unit, Unit> RestartCommand { get; }
+      public ReactiveCommand<Unit, Unit> ClearConsoleCommand { get; }
+      public ReactiveCommand<Unit, Unit> CopyConsoleCommand { get; }
+      public ReactiveCommand<CommandPreset, Unit> LoadPresetCommand { get; }
+
+      public WorktreeDetailViewModel(WorktreeInfo info, IProcessManager processManager,
+          IShellService shell, IConfigService config)
+      {
+          _info = info;
+          _processManager = processManager;
+          _shell = shell;
+          _config = config;
+
+          var runner = _processManager.GetOrCreate(info.Path);
+
+          // Load saved command for this worktree
+          if (_config.Config.Worktrees.TryGetValue(info.Path, out var wtConfig))
+              _command = wtConfig.Command ?? _config.Config.DefaultCommand;
+          else
+              _command = _config.Config.DefaultCommand;
+
+          // Status from runner
+          _status = runner.Status
+              .ObserveOn(RxApp.MainThreadScheduler)
+              .ToProperty(this, x => x.Status);
+
+          _statusText = this.WhenAnyValue(x => x.Status)
+              .Select(s => s.ToString().ToLowerInvariant())
+              .ToProperty(this, x => x.StatusText);
+
+          _isRunning = this.WhenAnyValue(x => x.Status)
+              .Select(s => s == ProcessStatus.Running)
+              .ToProperty(this, x => x.IsRunning);
+
+          // Console buffer
+          _consoleBuffer.Attach(runner.Output);
+          _consoleBuffer.Connect()
+              .ObserveOn(RxApp.MainThreadScheduler)
+              .Bind(out _consoleLines)
+              .Subscribe()
+              .DisposeWith(_disposables);
+
+          // Presets from config
+          var presetsSource = new SourceList<CommandPreset>();
+          presetsSource.AddRange(_config.Config.Presets);
+          presetsSource.Connect()
+              .ObserveOn(RxApp.MainThreadScheduler)
+              .Bind(out _presets)
+              .Subscribe()
+              .DisposeWith(_disposables);
+
+          // Elapsed time ticker
+          _elapsed = this.WhenAnyValue(x => x.Status)
+              .Select(s => s == ProcessStatus.Running
+                  ? Observable.Interval(TimeSpan.FromSeconds(30))
+                      .Select(_ => FormatElapsed(runner.StartedAt))
+                      .StartWith(FormatElapsed(runner.StartedAt))
+                  : Observable.Return<string?>(null))
+              .Switch()
+              .ObserveOn(RxApp.MainThreadScheduler)
+              .ToProperty(this, x => x.Elapsed);
+
+          // Commands with CanExecute
+          var canRun = this.WhenAnyValue(x => x.Status, x => x.Command,
+              (s, c) => s != ProcessStatus.Running && !string.IsNullOrWhiteSpace(c));
+          var canStop = this.WhenAnyValue(x => x.Status,
+              s => s == ProcessStatus.Running);
+
+          RunCommand = ReactiveCommand.Create(DoRun, canRun);
+          StopCommand = ReactiveCommand.CreateFromTask(DoStopAsync, canStop);
+          RestartCommand = ReactiveCommand.CreateFromTask(DoRestartAsync, canStop);
+          ClearConsoleCommand = ReactiveCommand.Create(() => _consoleBuffer.Clear());
+          CopyConsoleCommand = ReactiveCommand.CreateFromTask(DoCopyConsoleAsync);
+          LoadPresetCommand = ReactiveCommand.Create<CommandPreset>(preset => Command = preset.Command);
+      }
+
+      private void DoRun()
+      {
+          var envOverrides = _config.Config.Worktrees
+              .GetValueOrDefault(_info.Path)?.Env;
+          var psi = _shell.CreateStartInfo(Command, _info.Path, envOverrides);
+          var runner = _processManager.GetOrCreate(_info.Path);
+          runner.Start(psi);
+
+          // Persist command choice
+          SaveWorktreeCommand();
+      }
+
+      private async Task DoStopAsync(CancellationToken ct)
+      {
+          var runner = _processManager.GetOrCreate(_info.Path);
+          await runner.StopAsync();
+      }
+
+      private async Task DoRestartAsync(CancellationToken ct)
+      {
+          var envOverrides = _config.Config.Worktrees
+              .GetValueOrDefault(_info.Path)?.Env;
+          var psi = _shell.CreateStartInfo(Command, _info.Path, envOverrides);
+          var runner = _processManager.GetOrCreate(_info.Path);
+          await runner.RestartAsync(psi);
+      }
+
+      private void SaveWorktreeCommand()
+      {
+          if (!_config.Config.Worktrees.ContainsKey(_info.Path))
+              _config.Config.Worktrees[_info.Path] = new WorktreeConfig();
+          _config.Config.Worktrees[_info.Path].Command = Command;
+          _ = _config.SaveAsync(); // fire and forget
+      }
+
+      private static string? FormatElapsed(DateTimeOffset? startedAt)
+      {
+          if (startedAt is null) return null;
+          var elapsed = DateTimeOffset.Now - startedAt.Value;
+          return elapsed.TotalMinutes < 1 ? "just now" : $"{(int)elapsed.TotalMinutes}m ago";
+      }
+
+      public void Dispose()
+      {
+          _disposables.Dispose();
+          _consoleBuffer.Dispose();
+      }
+  }
+  ```
+  **Acceptance**: Selecting a worktree creates this VM; Run/Stop/Restart commands work with correct CanExecute; console lines stream in; elapsed time updates.
+
+- [x] **3.5 SettingsViewModel** `[L]`
+  **What**: ViewModel for the settings page. Manages roots list, presets list, global defaults, per-worktree overrides, and appearance settings. All mutations save config immediately.
+  **Files**:
+  - `src/Grove/ViewModels/SettingsViewModel.cs` (new)
+  **Key code**:
+  ```csharp
+  public class SettingsViewModel : ReactiveObject
+  {
+      private readonly IConfigService _config;
+
+      // Roots
+      private readonly SourceList<RootConfig> _roots = new();
+      private readonly ReadOnlyObservableCollection<RootConfig> _rootList;
+      public ReadOnlyObservableCollection<RootConfig> Roots => _rootList;
+
+      // Presets
+      private readonly SourceList<CommandPreset> _presets = new();
+      private readonly ReadOnlyObservableCollection<CommandPreset> _presetList;
+      public ReadOnlyObservableCollection<CommandPreset> PresetList => _presetList;
+
+      // Global defaults
+      private string _defaultCommand;
+      public string DefaultCommand
+      {
+          get => _defaultCommand;
+          set => this.RaiseAndSetIfChanged(ref _defaultCommand, value);
+      }
+
+      private bool _autoStart;
+      public bool AutoStart
+      {
+          get => _autoStart;
+          set => this.RaiseAndSetIfChanged(ref _autoStart, value);
+      }
+
+      // Appearance
+      private AppTheme _theme;
+      public AppTheme Theme
+      {
+          get => _theme;
+          set => this.RaiseAndSetIfChanged(ref _theme, value);
+      }
+
+      private int _consoleFontSize;
+      public int ConsoleFontSize
+      {
+          get => _consoleFontSize;
+          set => this.RaiseAndSetIfChanged(ref _consoleFontSize, value);
+      }
+
+      // Commands
+      public ReactiveCommand<Unit, Unit> AddRootCommand { get; }
+      public ReactiveCommand<RootConfig, Unit> RemoveRootCommand { get; }
+      public ReactiveCommand<Unit, Unit> AddPresetCommand { get; }
+      public ReactiveCommand<CommandPreset, Unit> RemovePresetCommand { get; }
+      public ReactiveCommand<Unit, Unit> SaveCommand { get; }
+
+      public SettingsViewModel(IConfigService config)
+      {
+          _config = config;
+          _defaultCommand = config.Config.DefaultCommand;
+          _autoStart = config.Config.AutoStart;
+          _theme = config.Config.Theme;
+          _consoleFontSize = config.Config.ConsoleFontSize;
+
+          _roots.AddRange(config.Config.Roots);
+          _roots.Connect()
+              .ObserveOn(RxApp.MainThreadScheduler)
+              .Bind(out _rootList)
+              .Subscribe();
+
+          _presets.AddRange(config.Config.Presets);
+          _presets.Connect()
+              .ObserveOn(RxApp.MainThreadScheduler)
+              .Bind(out _presetList)
+              .Subscribe();
+
+          // Auto-save on any property change
+          this.WhenAnyValue(x => x.DefaultCommand, x => x.AutoStart, x => x.Theme, x => x.ConsoleFontSize)
+              .Skip(1) // skip initial values
+              .Throttle(TimeSpan.FromMilliseconds(500))
+              .ObserveOn(RxApp.MainThreadScheduler)
+              .Subscribe(_ => PersistSettings());
+
+          AddRootCommand = ReactiveCommand.CreateFromTask(AddRootAsync);
+          RemoveRootCommand = ReactiveCommand.Create<RootConfig>(RemoveRoot);
+          AddPresetCommand = ReactiveCommand.Create(AddPreset);
+          RemovePresetCommand = ReactiveCommand.Create<CommandPreset>(RemovePreset);
+      }
+
+      private void PersistSettings()
+      {
+          _config.Config.DefaultCommand = DefaultCommand;
+          _config.Config.AutoStart = AutoStart;
+          _config.Config.Theme = Theme;
+          _config.Config.ConsoleFontSize = ConsoleFontSize;
+          _config.Config.Roots = _rootList.ToList();
+          _config.Config.Presets = _presetList.ToList();
+          _ = _config.SaveAsync();
+      }
+  }
+  ```
+  **Acceptance**: Changing settings persists to config file; adding/removing roots and presets works.
+
+- [x] **3.6 AddWorktreeViewModel — dialog** `[M]`
+  **What**: ViewModel for the "add worktree" dialog. Takes a root path, lets user enter a branch name and optional custom path, then calls `git worktree add`.
+  **Files**:
+  - `src/Grove/ViewModels/AddWorktreeViewModel.cs` (new)
+  **Key code**:
+  ```csharp
+  public class AddWorktreeViewModel : ReactiveObject
+  {
+      private readonly IGitService _git;
+      private readonly string _repoPath;
+
+      private string _branchName = string.Empty;
+      public string BranchName
+      {
+          get => _branchName;
+          set => this.RaiseAndSetIfChanged(ref _branchName, value);
+      }
+
+      private string _customPath = string.Empty;
+      public string CustomPath
+      {
+          get => _customPath;
+          set => this.RaiseAndSetIfChanged(ref _customPath, value);
+      }
+
+      private readonly ObservableAsPropertyHelper<bool> _canCreate;
+      public bool CanCreate => _canCreate.Value;
+
+      public ReactiveCommand<Unit, WorktreeInfo?> CreateCommand { get; }
+      public ReactiveCommand<Unit, Unit> CancelCommand { get; }
+
+      public AddWorktreeViewModel(string repoPath, IGitService git)
+      {
+          _repoPath = repoPath;
+          _git = git;
+
+          _canCreate = this.WhenAnyValue(x => x.BranchName)
+              .Select(b => !string.IsNullOrWhiteSpace(b))
+              .ToProperty(this, x => x.CanCreate);
+
+          var canExecute = this.WhenAnyValue(x => x.CanCreate);
+          CreateCommand = ReactiveCommand.CreateFromTask(CreateWorktreeAsync, canExecute);
+          CancelCommand = ReactiveCommand.Create(() => { });
+      }
+
+      private async Task<WorktreeInfo?> CreateWorktreeAsync(CancellationToken ct)
+      {
+          var path = string.IsNullOrWhiteSpace(CustomPath) ? null : CustomPath;
+          return await _git.AddWorktreeAsync(_repoPath, BranchName, path, ct);
+      }
+  }
+  ```
+  **Acceptance**: Dialog creates a worktree via git CLI; result is returned to caller.
+
+- [x] **3.7 ViewModelBase and shared infrastructure** `[S]`
+  **What**: Create a `ViewModelBase` class that all ViewModels inherit from (extends `ReactiveObject`, implements `IActivatableViewModel`). Also create any shared reactive extensions or helpers.
+  **Files**:
+  - `src/Grove/ViewModels/ViewModelBase.cs` (new)
+  **Key code**:
+  ```csharp
+  public abstract class ViewModelBase : ReactiveObject, IActivatableViewModel
+  {
+      public ViewModelActivator Activator { get; } = new();
+  }
+  ```
+  Note: The template may already generate this. Verify and update to ensure it extends `ReactiveObject` (not `ObservableObject` from CommunityToolkit).
+  **Acceptance**: All ViewModels compile using `ViewModelBase` as base class.
 
 ---
 
 ### Phase 4: Views & Styling
 
-- [ ] 4.1 **Define color palette and theme resources** `[M]`
-  **What**: Create AXAML resource dictionaries defining the Grove color palette for dark and light themes. Based on the mockup: dark charcoal background (#1e1e2e), sidebar slightly lighter (#252535), green accents (#4ec9b0), muted text (#888), console background (#0d0d14).
+- [x] **4.1 App theme and global styles** `[L]`
+  **What**: Define the Grove visual theme. Use Avalonia's `FluentTheme` as base, then override with custom styles for the dark sidebar, dark console, accent colors, and typography. Support light/dark/system theme switching.
   **Files**:
-  - `src/Grove/Styles/Colors.axaml` — color resource dictionary (brushes, colors)
-  - `src/Grove/Styles/DarkTheme.axaml` — dark theme overrides
-  - `src/Grove/Styles/LightTheme.axaml` — light theme overrides
-  - `src/Grove/Styles/Base.axaml` — shared styles (fonts, spacing, common control styles)
-  **Color tokens** (dark theme, from mockup):
-  ```
-  GroveBg:          #1a1a2e
-  GroveSidebarBg:   #16161e
-  GroveSurfaceBg:   #1e1e2e
-  GroveConsoleBg:   #0d0d14
-  GroveAccent:      #4ec9b0 (teal green)
-  GroveText:        #d4d4d4
-  GroveMuted:       #666680
-  GroveError:       #f44747
-  GroveWarning:     #dcdcaa
-  GroveBorder:      #2d2d3f
-  GroveRunning:     #4ec9b0 (green badge)
-  GroveIdle:        #666680 (grey)
-  GroveStarting:    #dcdcaa (amber)
-  ```
-  **Acceptance**: Resources load without errors. Theme switching works.
-
-- [ ] 4.2 **Implement MainWindow.axaml layout** `[M]`
-  **What**: Two-panel layout matching the mockup. Left sidebar (fixed ~280px or resizable via `GridSplitter`), right detail panel (fills remaining space). Use a `Grid` with two columns.
-  **Files**: `src/Grove/MainWindow.axaml`, `src/Grove/MainWindow.axaml.cs`
-  **Layout structure**:
+  - `src/Grove/App.axaml` (modify — add theme resources)
+  - `src/Grove/Styles/GroveTheme.axaml` (new)
+  - `src/Grove/Styles/Colors.axaml` (new)
+  **Key code**:
   ```xml
-  <Grid ColumnDefinitions="280,*">
+  <!-- Colors.axaml -->
+  <ResourceDictionary xmlns="https://github.com/avaloniaui"
+                      xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
     <!-- Sidebar -->
-    <Border Grid.Column="0" Background="{DynamicResource GroveSidebarBg}">
-      <views:SidebarView DataContext="{Binding}" />
-    </Border>
-    <!-- Detail panel -->
-    <ContentControl Grid.Column="1" Content="{Binding CurrentDetailView}" />
-  </Grid>
-  ```
-  **Window properties**: `Title="Grove"`, `MinWidth="900"`, `MinHeight="600"`, `Background="{DynamicResource GroveBg}"`, window icon from assets.
-  **Acceptance**: Two-panel layout renders. Sidebar on left, detail on right.
+    <Color x:Key="SidebarBackground">#1E1E2E</Color>
+    <Color x:Key="SidebarForeground">#CDD6F4</Color>
+    <Color x:Key="SidebarGroupHeader">#A6ADC8</Color>
 
-- [ ] 4.3 **Implement SidebarView** `[L]`
-  **What**: The left panel showing the Grove logo/title at top, then a scrollable list of roots with nested worktrees, and "add" buttons at the bottom.
-  **Files**: `src/Grove/Views/SidebarView.axaml`, `src/Grove/Views/SidebarView.axaml.cs`
-  **Structure**:
-  ```xml
-  <DockPanel>
-    <!-- Header: Grove logo + settings gear -->
-    <Border DockPanel.Dock="Top" Padding="16,12">
-      <Grid ColumnDefinitions="Auto,*,Auto">
-        <PathIcon Data="..." /> <!-- tree icon -->
-        <TextBlock Text="grove" FontWeight="Bold" FontSize="18" />
-        <Button Command="{Binding OpenSettingsCommand}"> <!-- gear icon --> </Button>
-      </Grid>
-    </Border>
-    
-    <!-- Footer: add buttons -->
-    <StackPanel DockPanel.Dock="Bottom" Margin="16,8">
-      <Button Content="+ add root" Command="{Binding AddRootCommand}" />
-    </StackPanel>
-    
-    <!-- Worktree tree -->
-    <ScrollViewer>
-      <ItemsControl ItemsSource="{Binding Roots}">
-        <ItemsControl.ItemTemplate>
-          <DataTemplate DataType="vm:RootViewModel">
-            <!-- Root header (collapsible) -->
-            <!-- Nested worktree items -->
-          </DataTemplate>
-        </ItemsControl.ItemTemplate>
-      </ItemsControl>
-    </ScrollViewer>
-  </DockPanel>
-  ```
-  **Worktree item template**: Status dot (Ellipse with color bound to Status via converter) + branch name (bold) + short path (muted, smaller font). Entire item is clickable (selects worktree).
-  **Collapsible roots**: Use an `Expander` or custom toggle with `IsExpanded` binding. Root header shows repo name in uppercase (from mockup: "MY-APP").
-  **Selection**: Bind `SelectedWorktree` from `MainWindowViewModel`. Highlight selected item with accent border or background.
-  **Acceptance**: Roots display with nested worktrees. Clicking selects. Collapsing works. Status dots show correct colors.
+    <!-- Console -->
+    <Color x:Key="ConsoleBackground">#11111B</Color>
+    <Color x:Key="ConsoleForeground">#CDD6F4</Color>
 
-- [ ] 4.4 **Create StatusDotConverter** `[S]`
-  **What**: `IValueConverter` that maps `ProcessStatus` enum to a `SolidColorBrush` for the sidebar status dot.
-  **Files**: `src/Grove/Converters/StatusDotConverter.cs`
-  **Mapping**: `Running → Green (#4ec9b0)`, `Idle → Grey (#666680)`, `Error → Red (#f44747)`, `Starting → Amber (#dcdcaa)`
-  **Acceptance**: Dots render correct colors for each status.
+    <!-- Status dots -->
+    <Color x:Key="StatusRunning">#4EC9B0</Color>
+    <Color x:Key="StatusIdle">#808080</Color>
+    <Color x:Key="StatusError">#F44747</Color>
+    <Color x:Key="StatusStarting">#DCDCAA</Color>
 
-- [ ] 4.5 **Implement WorktreeDetailView** `[L]`
-  **What**: The right panel showing header, command bar, and console for the selected worktree.
-  **Files**: `src/Grove/Views/WorktreeDetailView.axaml`, `src/Grove/Views/WorktreeDetailView.axaml.cs`
-  **Layout** (from mockup, top to bottom):
+    <!-- Accent -->
+    <Color x:Key="AccentGreen">#4EC9B0</Color>
+    <Color x:Key="DetailBackground">#181825</Color>
+  </ResourceDictionary>
   ```
-  ┌─────────────────────────────────────────┐
-  │ Header: branch (large) + path · upstream │ [running] badge
-  ├─────────────────────────────────────────┤
-  │ COMMAND label                            │
-  │ [command input          ] [stop][restart]│
-  │ Presets: [npm run dev] [npm test] [+]   │
-  ├─────────────────────────────────────────┤
-  │ Console output (dark, scrollable)        │
-  │ grove · main · started 4m ago            │
-  │ ─────────────────────                    │
-  │ ▶ vite dev                               │
-  │ VITE v5.2.1 ready in 312ms              │
-  │ ...                                      │
-  └─────────────────────────────────────────┘
-  ```
-  **Header section**: `TextBlock` for branch (FontSize=24, Bold), path + upstream in muted text, status badge (Border with rounded corners, green/grey/red background + white text).
-  **Command section**: `TextBox` for command input, `Button` for Stop (visible when running), `Button` for Restart (visible when running), `Button` for Run (visible when idle/error). Use `IsVisible` bindings to `CanRun`/`CanStop`. Below: `ItemsRepeater` with `WrapLayout` for preset chips (rounded `Border` + `TextBlock`, clickable).
-  **Console section**: See task 4.6.
-  **Acceptance**: All three zones render correctly. Buttons show/hide based on status. Presets display as chips.
+  **Acceptance**: App renders with dark theme matching the mockup. Theme can be switched at runtime.
 
-- [ ] 4.6 **Implement ConsoleControl (ANSI rendering)** `[XL]`
-  **What**: Custom control that renders console output with ANSI color support. This is the most complex UI component.
+- [x] **4.2 MainWindow — shell layout** `[M]`
+  **What**: Implement the main window as a `ReactiveWindow<MainWindowViewModel>`. Two-panel layout: sidebar (fixed width ~280px) + detail panel (fills remaining). Title bar shows "grove" with icon. Conditional display: detail panel vs settings page based on `IsSettingsOpen`.
   **Files**:
-  - `src/Grove/Controls/ConsoleControl.axaml` (UserControl)
-  - `src/Grove/Controls/ConsoleControl.axaml.cs`
-  - `src/Grove/Controls/ConsoleLineControl.cs` (templated control or helper)
-  **Architecture**:
-  - Use an `ItemsRepeater` inside a `ScrollViewer` for virtualized rendering of potentially 10K lines.
-  - Each line is rendered as a `SelectableTextBlock` with `Inlines` collection populated from `AnsiSpan` data.
-  - The `ItemsRepeater.ItemTemplate` creates a `SelectableTextBlock` per line.
-  - A value converter (`AnsiSpansToInlinesConverter`) converts `List<AnsiSpan>` → `InlineCollection` with styled `Run` elements.
-  **Key details**:
-  - **Auto-scroll**: When new lines are added and user is scrolled to bottom, auto-scroll to keep at bottom. If user has scrolled up, don't auto-scroll (let them read). Detect via `ScrollViewer.Offset` vs `ScrollViewer.Extent`.
-  - **Performance**: `ItemsRepeater` with `StackLayout` provides virtualization. Only visible lines are rendered.
-  - **Header line**: First element is a dim "grove · {branch} · started Xm ago" text with a separator line below.
-  - **Monospace font**: Use `Cascadia Mono`, `Consolas`, `monospace` font family.
-  - **Background**: Dark console background (`GroveConsoleBg`).
-  - **Clear button**: Top-right corner of console area, semi-transparent.
-  - **Copy button**: Adjacent to clear, copies all text (stripped of ANSI) to clipboard.
-  **Acceptance**: Console renders colored output. Auto-scroll works. 10K lines don't cause lag. Clear/copy work.
+  - `src/Grove/Views/MainWindow.axaml` (rewrite)
+  - `src/Grove/Views/MainWindow.axaml.cs` (rewrite)
+  **Key code**:
+  ```xml
+  <Window xmlns="https://github.com/avaloniaui"
+          xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+          xmlns:vm="using:Grove.ViewModels"
+          xmlns:views="using:Grove.Views"
+          x:Class="Grove.Views.MainWindow"
+          x:DataType="vm:MainWindowViewModel"
+          Title="grove" Width="1100" Height="700" MinWidth="800" MinHeight="500">
+    <Grid ColumnDefinitions="280,*">
+      <!-- Sidebar -->
+      <views:SidebarView Grid.Column="0" DataContext="{Binding}" />
 
-- [ ] 4.7 **Create AnsiSpansToInlinesConverter** `[M]`
-  **What**: Avalonia `IValueConverter` that takes a `List<AnsiSpan>` and produces `InlineCollection` for a `SelectableTextBlock`.
-  **Files**: `src/Grove/Converters/AnsiSpansToInlinesConverter.cs`
-  **Implementation**:
+      <!-- Detail or Settings -->
+      <ContentControl Grid.Column="1">
+        <ContentControl.Content>
+          <MultiBinding Converter="{x:Static views:DetailOrSettingsConverter.Instance}">
+            <Binding Path="IsSettingsOpen" />
+            <Binding Path="Detail" />
+          </MultiBinding>
+        </ContentControl.Content>
+      </ContentControl>
+    </Grid>
+  </Window>
+  ```
   ```csharp
-  public object Convert(object value, ...)
+  public partial class MainWindow : ReactiveWindow<MainWindowViewModel>
   {
-      if (value is not List<AnsiSpan> spans) return new InlineCollection();
-      var inlines = new InlineCollection();
-      foreach (var span in spans)
+      public MainWindow()
       {
-          var run = new Run(span.Text);
-          if (span.Foreground is { } fg)
-              run.Foreground = new SolidColorBrush(Color.FromRgb(fg.R, fg.G, fg.B));
-          if (span.Bold) run.FontWeight = FontWeight.Bold;
-          if (span.Italic) run.FontStyle = FontStyle.Italic;
-          if (span.Underline) run.TextDecorations = TextDecorations.Underline;
-          inlines.Add(run);
+          InitializeComponent();
       }
-      return inlines;
   }
   ```
-  **Note**: Avalonia's `SelectableTextBlock` supports `Inlines` property. Verify this works with binding (may need a custom attached property or code-behind approach if direct binding to `Inlines` isn't supported — in that case, use a behavior or custom control that sets Inlines in code).
-  **Acceptance**: Colored text renders in console lines.
+  **Acceptance**: Window renders with sidebar on left, detail on right. Resizing works correctly.
 
-- [ ] 4.8 **Implement SettingsView** `[M]`
-  **What**: Settings page with sections for global defaults, roots manager, presets manager, per-worktree overrides, and appearance.
-  **Files**: `src/Grove/Views/SettingsView.axaml`, `src/Grove/Views/SettingsView.axaml.cs`
-  **Layout**: Scrollable single-column form with section headers.
-  **Sections**:
-  1. **Global Defaults**: TextBox for default command, ToggleSwitch for auto-start.
-  2. **Roots Manager**: `ItemsControl` listing roots. Each row: path (TextBlock), mode toggle (repo/scan `ComboBox`), remove button. "Add root" button at bottom.
-  3. **Presets Manager**: `ItemsControl` listing presets. Each row: name TextBox, command TextBox, remove button. "Add preset" button.
-  4. **Per-Worktree Overrides**: `ItemsControl` listing overrides. Each row: worktree path (read-only), command TextBox, env vars (nested `DataGrid` or `ItemsControl` of key-value rows).
-  5. **Appearance**: Theme selector (`ComboBox`: Light/Dark/System), console font size (`NumericUpDown` or `Slider`).
-  **Acceptance**: All settings editable and persisted. Theme change applies live.
+- [x] **4.3 SidebarView — repo groups and worktree entries** `[L]`
+  **What**: Implement the sidebar as a `ReactiveUserControl`. Shows the Grove logo/title at top, then a scrollable list of root groups. Each root is a collapsible `TreeView` or `Expander` with worktree entries underneath. Bottom has "+ add worktree" and "+ add root" buttons. Worktree entries show status dot + branch name + short path.
+  **Files**:
+  - `src/Grove/Views/SidebarView.axaml` (new)
+  - `src/Grove/Views/SidebarView.axaml.cs` (new)
+  - `src/Grove/Views/WorktreeEntryView.axaml` (new — DataTemplate for worktree items)
+  - `src/Grove/Views/WorktreeEntryView.axaml.cs` (new)
+  **Key code**:
+  ```xml
+  <!-- SidebarView.axaml -->
+  <UserControl xmlns="https://github.com/avaloniaui"
+               xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+               xmlns:vm="using:Grove.ViewModels"
+               x:Class="Grove.Views.SidebarView"
+               x:DataType="vm:MainWindowViewModel">
+    <Border Background="{DynamicResource SidebarBackground}">
+      <DockPanel>
+        <!-- Header -->
+        <StackPanel DockPanel.Dock="Top" Margin="16,12">
+          <TextBlock Text="🌿 grove" FontSize="18" FontWeight="Bold"
+                     Foreground="{DynamicResource SidebarForeground}" />
+        </StackPanel>
 
-- [ ] 4.9 **Implement theme switching** `[M]`
-  **What**: Support Light/Dark/System theme modes. Load the appropriate resource dictionary based on the setting. For "System", detect OS theme preference.
-  **Files**: `src/Grove/App.axaml.cs` (theme loading logic), `src/Grove/Styles/DarkTheme.axaml`, `src/Grove/Styles/LightTheme.axaml`
-  **Implementation**:
-  - Use Avalonia's `RequestedThemeVariant` on `Application` — set to `ThemeVariant.Dark`, `ThemeVariant.Light`, or `ThemeVariant.Default` (system).
-  - Override specific resources in each theme dictionary for Grove-specific colors.
-  - When theme setting changes in SettingsViewModel, update `Application.Current.RequestedThemeVariant`.
-  **Acceptance**: Switching between Light/Dark/System works. All custom colors adapt.
+        <!-- Bottom buttons -->
+        <StackPanel DockPanel.Dock="Bottom" Margin="16,8">
+          <Button Content="+ add worktree" Command="{Binding AddWorktreeCommand}"
+                  Classes="sidebar-action" />
+          <Button Content="+ add root" Command="{Binding AddRootCommand}"
+                  Classes="sidebar-action" />
+        </StackPanel>
 
-- [ ] 4.10 **Style all controls to match mockup** `[M]`
-  **What**: Apply custom styles to buttons, text inputs, borders, etc. to match the dark terminal aesthetic from the mockup. Rounded corners on buttons and inputs, subtle borders, proper spacing.
-  **Files**: `src/Grove/Styles/Base.axaml`
-  **Key styles**:
-  - Buttons: rounded corners (4px), subtle border, hover effect
-  - TextBox (command input): dark background, light text, rounded corners, larger font
-  - Preset chips: pill-shaped borders, muted background, hover highlight
-  - Status badge: small rounded pill with colored background + white text
-  - Sidebar items: hover highlight, selected state with accent left border
-  - Section headers: uppercase, muted, small font, letter-spacing
-  **Acceptance**: Visual match to mockup. Consistent styling across all views.
+        <!-- Root groups -->
+        <ScrollViewer>
+          <ItemsControl ItemsSource="{Binding Roots}">
+            <ItemsControl.ItemTemplate>
+              <DataTemplate DataType="vm:RootViewModel">
+                <StackPanel Margin="0,4">
+                  <!-- Root header -->
+                  <Button Command="{Binding ToggleExpandCommand}" Classes="root-header">
+                    <TextBlock Text="{Binding Name}" FontWeight="SemiBold"
+                               Foreground="{DynamicResource SidebarGroupHeader}" />
+                  </Button>
+                  <!-- Worktree entries (visible when expanded) -->
+                  <ItemsControl ItemsSource="{Binding Worktrees}"
+                                IsVisible="{Binding IsExpanded}">
+                    <ItemsControl.ItemTemplate>
+                      <DataTemplate DataType="vm:WorktreeViewModel">
+                        <!-- Worktree entry with status dot -->
+                        <Button Classes="worktree-entry"
+                                Command="{Binding $parent[ItemsControl].((vm:MainWindowViewModel)DataContext).SelectWorktreeCommand}"
+                                CommandParameter="{Binding}">
+                          <StackPanel Orientation="Horizontal" Spacing="8">
+                            <Ellipse Width="8" Height="8"
+                                     Fill="{Binding StatusColor}" />
+                            <StackPanel>
+                              <TextBlock Text="{Binding BranchName}" FontWeight="Medium" />
+                              <TextBlock Text="{Binding ShortPath}" FontSize="11" Opacity="0.6" />
+                            </StackPanel>
+                          </StackPanel>
+                        </Button>
+                      </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                  </ItemsControl>
+                </StackPanel>
+              </DataTemplate>
+            </ItemsControl.ItemTemplate>
+          </ItemsControl>
+        </ScrollViewer>
+      </DockPanel>
+    </Border>
+  </UserControl>
+  ```
+  **Acceptance**: Sidebar shows roots with worktrees; clicking a worktree selects it; status dots render with correct colors.
 
-- [ ] 4.11 **Add "empty state" and "no selection" views** `[S]`
-  **What**: When no worktree is selected, show a centered message in the detail panel ("Select a worktree to get started"). When a root has no worktrees, show a message in the sidebar group. When no roots are configured (first launch), show a welcome/onboarding prompt.
-  **Files**: `src/Grove/Views/EmptyStateView.axaml`, `src/Grove/Views/WelcomeView.axaml`
-  **Acceptance**: Empty states display appropriately.
+- [x] **4.4 WorktreeDetailView — header + command bar + console** `[XL]`
+  **What**: The main detail panel view. Three zones: header (branch name, path, upstream, status badge), command bar (text input + run/stop/restart buttons + preset chips), and console output area. Uses `ReactiveUserControl<WorktreeDetailViewModel>`.
+  **Files**:
+  - `src/Grove/Views/WorktreeDetailView.axaml` (new)
+  - `src/Grove/Views/WorktreeDetailView.axaml.cs` (new)
+  **Key code**:
+  ```xml
+  <UserControl xmlns="https://github.com/avaloniaui"
+               xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+               xmlns:vm="using:Grove.ViewModels"
+               x:Class="Grove.Views.WorktreeDetailView"
+               x:DataType="vm:WorktreeDetailViewModel">
+    <DockPanel Background="{DynamicResource DetailBackground}">
+      <!-- Header -->
+      <Border DockPanel.Dock="Top" Padding="24,16">
+        <Grid ColumnDefinitions="*,Auto">
+          <StackPanel>
+            <TextBlock Text="{Binding BranchName}" FontSize="24" FontWeight="Bold" />
+            <StackPanel Orientation="Horizontal" Spacing="8" Opacity="0.6">
+              <TextBlock Text="{Binding FullPath}" />
+              <TextBlock Text="·" />
+              <TextBlock Text="{Binding UpstreamBranch}" />
+            </StackPanel>
+          </StackPanel>
+          <!-- Status badge -->
+          <Border Grid.Column="1" Classes="status-badge"
+                  Classes.running="{Binding IsRunning}">
+            <TextBlock Text="{Binding StatusText}" />
+          </Border>
+        </Grid>
+      </Border>
+
+      <!-- Command bar -->
+      <Border DockPanel.Dock="Top" Padding="24,8">
+        <StackPanel Spacing="8">
+          <TextBlock Text="COMMAND" FontSize="11" Opacity="0.5" />
+          <Grid ColumnDefinitions="*,Auto,Auto">
+            <TextBox Text="{Binding Command}" FontFamily="Cascadia Code,Consolas,monospace"
+                     Watermark="Enter command..." />
+            <Button Grid.Column="1" Content="stop" Command="{Binding StopCommand}" Margin="8,0,0,0" />
+            <Button Grid.Column="2" Content="restart" Command="{Binding RestartCommand}" Margin="8,0,0,0" />
+          </Grid>
+          <!-- Preset chips -->
+          <ItemsControl ItemsSource="{Binding Presets}">
+            <ItemsControl.ItemsPanel>
+              <ItemsPanelTemplate>
+                <WrapPanel Orientation="Horizontal" />
+              </ItemsPanelTemplate>
+            </ItemsControl.ItemsPanel>
+            <ItemsControl.ItemTemplate>
+              <DataTemplate>
+                <Button Content="{Binding Name}" Classes="preset-chip"
+                        Command="{Binding $parent[UserControl].((vm:WorktreeDetailViewModel)DataContext).LoadPresetCommand}"
+                        CommandParameter="{Binding}" Margin="0,0,8,0" />
+              </DataTemplate>
+            </ItemsControl.ItemTemplate>
+          </ItemsControl>
+        </StackPanel>
+      </Border>
+
+      <!-- Console output -->
+      <views:ConsoleView DataContext="{Binding}" />
+    </DockPanel>
+  </UserControl>
+  ```
+  **Acceptance**: Detail panel shows all three zones; command bar is functional; buttons enable/disable based on process state.
+
+- [x] **4.5 ConsoleView — virtualized ANSI output** `[XL]`
+  **What**: The terminal-style console output panel. Uses `ItemsRepeater` for virtualized rendering of `ConsoleLine` items. Each line is rendered as a `TextBlock` with `Inlines` (one `Run` per `ConsoleSpan` with appropriate foreground color). Dark background, monospace font. Shows dim header line "grove · {branch} · started Xm ago". Has a clear button and copy button.
+  **Files**:
+  - `src/Grove/Views/ConsoleView.axaml` (new)
+  - `src/Grove/Views/ConsoleView.axaml.cs` (new)
+  - `src/Grove/Converters/ConsoleLineToInlinesConverter.cs` (new)
+  **Key code**:
+  ```xml
+  <!-- ConsoleView.axaml -->
+  <UserControl xmlns="https://github.com/avaloniaui"
+               xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+               xmlns:vm="using:Grove.ViewModels"
+               x:Class="Grove.Views.ConsoleView"
+               x:DataType="vm:WorktreeDetailViewModel">
+    <Border Background="{DynamicResource ConsoleBackground}" CornerRadius="4" Margin="24,8,24,24">
+      <DockPanel>
+        <!-- Console header -->
+        <Border DockPanel.Dock="Top" Padding="16,8" Opacity="0.4">
+          <StackPanel Orientation="Horizontal" Spacing="8">
+            <TextBlock Text="grove" FontFamily="Cascadia Code,Consolas,monospace" />
+            <TextBlock Text="·" />
+            <TextBlock Text="{Binding BranchName}" FontFamily="Cascadia Code,Consolas,monospace" />
+            <TextBlock Text="·" />
+            <TextBlock Text="{Binding Elapsed, FallbackValue=''}"
+                       FontFamily="Cascadia Code,Consolas,monospace" />
+          </StackPanel>
+        </Border>
+        <Separator DockPanel.Dock="Top" Opacity="0.2" />
+
+        <!-- Action buttons -->
+        <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" HorizontalAlignment="Right" Margin="8,4">
+          <Button Content="Clear" Command="{Binding ClearConsoleCommand}" Classes="console-action" />
+          <Button Content="Copy" Command="{Binding CopyConsoleCommand}" Classes="console-action" />
+        </StackPanel>
+
+        <!-- Virtualized console lines -->
+        <ScrollViewer x:Name="ConsoleScroller" VerticalScrollBarVisibility="Auto">
+          <ItemsRepeater ItemsSource="{Binding ConsoleLines}">
+            <ItemsRepeater.ItemTemplate>
+              <DataTemplate>
+                <!-- Each ConsoleLine rendered with colored spans -->
+                <views:ConsoleLineControl Line="{Binding}" />
+              </DataTemplate>
+            </ItemsRepeater.ItemTemplate>
+          </ItemsRepeater>
+        </ScrollViewer>
+      </DockPanel>
+    </Border>
+  </UserControl>
+  ```
+  ```csharp
+  // ConsoleView.axaml.cs — auto-scroll behavior
+  public partial class ConsoleView : ReactiveUserControl<WorktreeDetailViewModel>
+  {
+      public ConsoleView()
+      {
+          InitializeComponent();
+
+          // Auto-scroll to bottom when new lines arrive
+          this.WhenActivated(d =>
+          {
+              this.WhenAnyValue(x => x.ViewModel!.ConsoleLines.Count)
+                  .Throttle(TimeSpan.FromMilliseconds(50))
+                  .ObserveOn(RxApp.MainThreadScheduler)
+                  .Subscribe(_ => ConsoleScroller.ScrollToEnd())
+                  .DisposeWith(d);
+          });
+      }
+  }
+  ```
+  **Acceptance**: Console renders lines with ANSI colors; auto-scrolls; 10,000 lines render without lag (virtualized).
+
+- [x] **4.6 ConsoleLineControl — styled spans** `[M]`
+  **What**: Custom control that renders a single `ConsoleLine` as a `TextBlock` with colored `Run` inlines. Each `ConsoleSpan` becomes a `Run` with the appropriate foreground/background brush.
+  **Files**:
+  - `src/Grove/Views/ConsoleLineControl.cs` (new — code-only control, no AXAML)
+  **Key code**:
+  ```csharp
+  public class ConsoleLineControl : Control
+  {
+      public static readonly StyledProperty<ConsoleLine?> LineProperty =
+          AvaloniaProperty.Register<ConsoleLineControl, ConsoleLine?>(nameof(Line));
+
+      public ConsoleLine? Line
+      {
+          get => GetValue(LineProperty);
+          set => SetValue(LineProperty, value);
+      }
+
+      static ConsoleLineControl()
+      {
+          AffectsRender<ConsoleLineControl>(LineProperty);
+      }
+
+      public override void Render(DrawingContext context)
+      {
+          // Render each span with appropriate color using FormattedText
+          // This is more performant than TextBlock with Inlines for large line counts
+          if (Line is null) return;
+
+          double x = 4; // left padding
+          var typeface = new Typeface("Cascadia Code,Consolas,monospace");
+          var fontSize = 13.0; // TODO: bind to settings
+
+          foreach (var span in Line.Spans)
+          {
+              var brush = span.Foreground is { } fg
+                  ? new SolidColorBrush(Color.FromRgb(fg.R, fg.G, fg.B))
+                  : Brushes.White;
+
+              var formattedText = new FormattedText(
+                  span.Text, CultureInfo.CurrentCulture,
+                  FlowDirection.LeftToRight, typeface, fontSize, brush);
+
+              context.DrawText(formattedText, new Point(x, 0));
+              x += formattedText.Width;
+          }
+      }
+
+      protected override Size MeasureOverride(Size availableSize)
+      {
+          return new Size(availableSize.Width, 20); // fixed line height
+      }
+  }
+  ```
+  **Acceptance**: ANSI-colored text renders correctly; performance is good with thousands of lines.
+
+- [x] **4.7 Status dot and badge styles** `[S]`
+  **What**: Define reusable styles for the status indicator dot (sidebar) and the status badge (detail header). Dot colors: green (running), grey (idle), red (error), amber (starting). Badge has a border with matching color.
+  **Files**:
+  - `src/Grove/Styles/StatusStyles.axaml` (new)
+  **Key code**:
+  ```xml
+  <Styles xmlns="https://github.com/avaloniaui"
+          xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <!-- Status badge -->
+    <Style Selector="Border.status-badge">
+      <Setter Property="BorderThickness" Value="1" />
+      <Setter Property="CornerRadius" Value="12" />
+      <Setter Property="Padding" Value="12,4" />
+      <Setter Property="BorderBrush" Value="{DynamicResource StatusIdle}" />
+    </Style>
+    <Style Selector="Border.status-badge.running">
+      <Setter Property="BorderBrush" Value="{DynamicResource StatusRunning}" />
+      <Setter Property="Background" Value="#1A4EC9B0" />
+    </Style>
+
+    <!-- Preset chip -->
+    <Style Selector="Button.preset-chip">
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="BorderBrush" Value="#404040" />
+      <Setter Property="BorderThickness" Value="1" />
+      <Setter Property="CornerRadius" Value="4" />
+      <Setter Property="Padding" Value="12,4" />
+      <Setter Property="FontSize" Value="12" />
+      <Setter Property="FontFamily" Value="Cascadia Code,Consolas,monospace" />
+    </Style>
+  </Styles>
+  ```
+  **Acceptance**: Status dots and badges render with correct colors matching the mockup.
+
+- [x] **4.8 SettingsView** `[L]`
+  **What**: Settings page view with sections for: roots manager (list + add/remove), presets manager (list + add/edit/remove), global defaults (default command, auto-start toggle), per-worktree overrides table, and appearance (theme picker, font size slider).
+  **Files**:
+  - `src/Grove/Views/SettingsView.axaml` (new)
+  - `src/Grove/Views/SettingsView.axaml.cs` (new)
+  **Key code**:
+  ```xml
+  <UserControl xmlns="https://github.com/avaloniaui"
+               xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+               xmlns:vm="using:Grove.ViewModels"
+               x:Class="Grove.Views.SettingsView"
+               x:DataType="vm:SettingsViewModel">
+    <ScrollViewer Padding="32">
+      <StackPanel Spacing="24" MaxWidth="700">
+        <TextBlock Text="Settings" FontSize="24" FontWeight="Bold" />
+
+        <!-- Roots Manager -->
+        <HeaderedContentControl Header="Roots">
+          <StackPanel Spacing="8">
+            <ItemsControl ItemsSource="{Binding Roots}">
+              <ItemsControl.ItemTemplate>
+                <DataTemplate>
+                  <Grid ColumnDefinitions="*,Auto,Auto">
+                    <TextBlock Text="{Binding Path}" VerticalAlignment="Center" />
+                    <TextBlock Grid.Column="1" Text="{Binding Mode}" Opacity="0.5" Margin="8,0" />
+                    <Button Grid.Column="2" Content="✕"
+                            Command="{Binding $parent[UserControl].((vm:SettingsViewModel)DataContext).RemoveRootCommand}"
+                            CommandParameter="{Binding}" />
+                  </Grid>
+                </DataTemplate>
+              </ItemsControl.ItemTemplate>
+            </ItemsControl>
+            <Button Content="+ Add Root" Command="{Binding AddRootCommand}" />
+          </StackPanel>
+        </HeaderedContentControl>
+
+        <!-- Global Defaults -->
+        <HeaderedContentControl Header="Defaults">
+          <StackPanel Spacing="8">
+            <TextBox Text="{Binding DefaultCommand}" Watermark="Default command" />
+            <CheckBox Content="Auto-start on worktree selection" IsChecked="{Binding AutoStart}" />
+          </StackPanel>
+        </HeaderedContentControl>
+
+        <!-- Appearance -->
+        <HeaderedContentControl Header="Appearance">
+          <StackPanel Spacing="8">
+            <ComboBox SelectedItem="{Binding Theme}" ItemsSource="{x:Static vm:SettingsViewModel.Themes}" />
+            <StackPanel Orientation="Horizontal" Spacing="8">
+              <TextBlock Text="Console font size:" VerticalAlignment="Center" />
+              <Slider Value="{Binding ConsoleFontSize}" Minimum="10" Maximum="20" Width="200" />
+              <TextBlock Text="{Binding ConsoleFontSize}" VerticalAlignment="Center" />
+            </StackPanel>
+          </StackPanel>
+        </HeaderedContentControl>
+      </StackPanel>
+    </ScrollViewer>
+  </UserControl>
+  ```
+  **Acceptance**: Settings page renders all sections; changes persist to config file.
+
+- [x] **4.9 AddWorktreeDialog** `[M]`
+  **What**: Modal dialog for creating a new worktree. Fields: branch name (required), custom path (optional). Create and Cancel buttons.
+  **Files**:
+  - `src/Grove/Views/AddWorktreeDialog.axaml` (new)
+  - `src/Grove/Views/AddWorktreeDialog.axaml.cs` (new)
+  **Key code**:
+  ```csharp
+  public partial class AddWorktreeDialog : ReactiveWindow<AddWorktreeViewModel>
+  {
+      public AddWorktreeDialog()
+      {
+          InitializeComponent();
+
+          this.WhenActivated(d =>
+          {
+              ViewModel!.CreateCommand
+                  .Subscribe(result => Close(result))
+                  .DisposeWith(d);
+              ViewModel!.CancelCommand
+                  .Subscribe(_ => Close(null))
+                  .DisposeWith(d);
+          });
+      }
+  }
+  ```
+  **Acceptance**: Dialog opens modally; creating a worktree returns the result; cancel closes without action.
+
+- [x] **4.10 Converters and value converters** `[S]`
+  **What**: Implement Avalonia value converters needed across views: `ProcessStatusToColorConverter`, `ProcessStatusToBoolConverter` (for button visibility), `BoolToVisibilityConverter`, etc.
+  **Files**:
+  - `src/Grove/Converters/ProcessStatusToColorConverter.cs` (new)
+  - `src/Grove/Converters/BoolToVisibilityConverter.cs` (new)
+  **Key code**:
+  ```csharp
+  public class ProcessStatusToColorConverter : IValueConverter
+  {
+      public static readonly ProcessStatusToColorConverter Instance = new();
+
+      public object Convert(object? value, Type targetType, object? parameter, CultureInfo culture)
+      {
+          return value is ProcessStatus status ? status switch
+          {
+              ProcessStatus.Running => new SolidColorBrush(Color.Parse("#4EC9B0")),
+              ProcessStatus.Error => new SolidColorBrush(Color.Parse("#F44747")),
+              ProcessStatus.Starting => new SolidColorBrush(Color.Parse("#DCDCAA")),
+              _ => new SolidColorBrush(Color.Parse("#808080")),
+          } : new SolidColorBrush(Colors.Gray);
+      }
+
+      public object ConvertBack(object? value, Type targetType, object? parameter, CultureInfo culture)
+          => throw new NotSupportedException();
+  }
+  ```
+  **Acceptance**: Converters work in XAML bindings; status colors render correctly.
+
+- [x] **4.11 ViewLocator setup** `[S]`
+  **What**: Configure the `ViewLocator` so ReactiveUI can automatically resolve Views for ViewModels. The template may include one — verify it works with our ViewModel naming convention (`FooViewModel` → `FooView`).
+  **Files**:
+  - `src/Grove/ViewLocator.cs` (modify or verify from template)
+  **Key code**:
+  ```csharp
+  public class ViewLocator : IViewLocator
+  {
+      public IViewFor? ResolveView<T>(T? viewModel, string? contract = null)
+      {
+          if (viewModel is null) return null;
+
+          var vmType = viewModel.GetType();
+          var viewTypeName = vmType.FullName!.Replace("ViewModel", "View");
+          var viewType = Type.GetType(viewTypeName);
+
+          if (viewType is null) return null;
+
+          return (IViewFor)Activator.CreateInstance(viewType)!;
+      }
+  }
+  ```
+  **Acceptance**: Setting a ViewModel as DataContext automatically resolves and displays the correct View.
 
 ---
 
 ### Phase 5: Process & Console Integration
 
-- [ ] 5.1 **Wire ProcessManager to ViewModels** `[M]`
-  **What**: Connect `IProcessManager` events to ViewModel property updates. Ensure all UI updates happen on the UI thread via `Dispatcher.UIThread`.
-  **Files**: `src/Grove/ViewModels/WorktreeDetailViewModel.cs`, `src/Grove/ViewModels/WorktreeViewModel.cs`
-  **Key wiring**:
-  - `ProcessManager.StatusChanged` → update `WorktreeViewModel.Status` and `WorktreeDetailViewModel.Status`
-  - `ConsoleOutputManager.LineAdded` → parse through `AnsiParser`, add `ConsoleLine` to `WorktreeDetailViewModel.ConsoleLines`
-  - All event handlers must use `Dispatcher.UIThread.InvokeAsync(...)` for thread safety.
-  **Acceptance**: Starting a process updates sidebar dot and detail panel status badge simultaneously.
-
-- [ ] 5.2 **Implement Run/Stop/Restart command logic** `[M]`
-  **What**: Implement the actual command execution flow in `WorktreeDetailViewModel`.
-  **Files**: `src/Grove/ViewModels/WorktreeDetailViewModel.cs`
-  **Run flow**:
-  1. Save current command to config
-  2. Set status to `Starting`
-  3. Call `ProcessManager.StartProcess(worktreePath, command, envVars)`
-  4. Status updates to `Running` via event
-  **Stop flow**:
-  1. Call `ProcessManager.StopProcessAsync(worktreePath)` with 5s grace period
-  2. Status updates to `Idle` via event
-  **Restart flow**:
-  1. Stop (await completion)
-  2. Clear console (optional — configurable)
-  3. Run
-  **Edge cases**:
-  - Empty command → show validation error, don't run
-  - Process exits on its own → status updates automatically
-  - Double-click prevention → disable button while operation in progress
-  **Acceptance**: Full run/stop/restart cycle works. Status transitions are correct.
-
-- [ ] 5.3 **Implement console auto-scroll behavior** `[M]`
-  **What**: Create an attached behavior for the console `ScrollViewer` that auto-scrolls to bottom when new content is added, but only if the user hasn't scrolled up.
-  **Files**: `src/Grove/Controls/AutoScrollBehavior.cs`
-  **Implementation**:
+- [x] **5.1 Wire process runner to detail view** `[M]`
+  **What**: Connect the `ProcessRunner` output observable to the `ConsoleBuffer` in `WorktreeDetailViewModel`. Ensure output streams to the console view in real-time. Verify thread marshalling is correct (output arrives on background thread, must observe on UI thread for binding).
+  **Files**:
+  - `src/Grove/ViewModels/WorktreeDetailViewModel.cs` (modify — verify wiring)
+  **Key code**:
   ```csharp
-  public class AutoScrollBehavior : AvaloniaObject
+  // Already in constructor from 3.4, but verify the full pipeline:
+  // ProcessRunner.Output (background thread)
+  //   → ConsoleBuffer.Attach() (parses ANSI, adds to SourceList)
+  //   → ConsoleBuffer.Connect() (DynamicData change sets)
+  //   → .ObserveOn(RxApp.MainThreadScheduler) (marshal to UI)
+  //   → .Bind(out _consoleLines) (ReadOnlyObservableCollection)
+  //   → ItemsRepeater in ConsoleView (renders)
+  ```
+  **Acceptance**: Running `echo hello` shows "hello" in the console view. Running a colored command (e.g. `npm test` with colors) shows colored output.
+
+- [x] **5.2 Process lifecycle management** `[M]`
+  **What**: Ensure the full process lifecycle works end-to-end: start → running (status green) → stop (graceful then force) → idle. Restart = stop + start. Verify status transitions update sidebar dots and detail badge simultaneously.
+  **Files**:
+  - `src/Grove/ViewModels/WorktreeViewModel.cs` (modify — bind to runner status)
+  - `src/Grove/ViewModels/MainWindowViewModel.cs` (modify — wire sidebar status)
+  **Key code**:
+  ```csharp
+  // In MainWindowViewModel, when creating WorktreeViewModels, bind them to runners:
+  // After worktree discovery, check if a runner exists and bind status
+  private void BindWorktreeStatuses()
   {
-      public static readonly AttachedProperty<bool> EnabledProperty = ...;
-      // On attached: subscribe to ScrollViewer.ScrollChanged
-      // Track if user is "at bottom" (within ~20px tolerance)
-      // When items change and user was at bottom, scroll to end
+      _processManager.Connect()
+          .Subscribe(changeSet =>
+          {
+              foreach (var change in changeSet)
+              {
+                  var wt = _rootList.SelectMany(r => r.Worktrees)
+                      .FirstOrDefault(w => w.Info.Path == change.Current.WorktreePath);
+                  wt?.BindToRunner(change.Current);
+              }
+          });
   }
   ```
-  **Alternative**: Handle in `ConsoleControl` code-behind by subscribing to collection changes and checking scroll position.
-  **Acceptance**: New output scrolls into view. Scrolling up pauses auto-scroll. Scrolling back to bottom resumes.
+  **Acceptance**: Starting a process turns sidebar dot green and badge to "running"; stopping turns it grey/"idle"; error exit turns it red/"error".
 
-- [ ] 5.4 **Implement elapsed time display** `[S]`
-  **What**: Show "started Xm ago" in the console header, updating every minute.
-  **Files**: `src/Grove/ViewModels/WorktreeDetailViewModel.cs`
-  **Implementation**: Use a `DispatcherTimer` with 60s interval. Compute elapsed from `ManagedProcess.StartedAt`. Format as "started Xs ago", "started Xm ago", "started Xh Ym ago". Stop timer when process stops.
-  **Acceptance**: Timer updates. Shows correct elapsed time.
+- [x] **5.3 Console auto-scroll and copy** `[S]`
+  **What**: Implement auto-scroll behavior (scroll to bottom on new output, unless user has scrolled up). Implement copy-to-clipboard for full console content.
+  **Files**:
+  - `src/Grove/Views/ConsoleView.axaml.cs` (modify)
+  **Key code**:
+  ```csharp
+  // Auto-scroll with user-scroll detection
+  this.WhenActivated(d =>
+  {
+      var isAtBottom = true;
+      ConsoleScroller.ScrollChanged += (_, e) =>
+      {
+          isAtBottom = ConsoleScroller.Offset.Y >=
+              ConsoleScroller.Extent.Height - ConsoleScroller.Viewport.Height - 20;
+      };
 
-- [ ] 5.5 **Implement clipboard copy for console** `[S]`
-  **What**: Copy all console text (plain text, ANSI stripped) to clipboard.
-  **Files**: `src/Grove/ViewModels/WorktreeDetailViewModel.cs`
-  **Implementation**: Iterate `ConsoleLines`, join span texts, use `TopLevel.Clipboard.SetTextAsync()`.
-  **Acceptance**: Copied text is plain (no ANSI codes) and matches console content.
+      this.WhenAnyValue(x => x.ViewModel!.ConsoleLines.Count)
+          .Where(_ => isAtBottom)
+          .Throttle(TimeSpan.FromMilliseconds(50))
+          .ObserveOn(RxApp.MainThreadScheduler)
+          .Subscribe(_ => ConsoleScroller.ScrollToEnd())
+          .DisposeWith(d);
+  });
+  ```
+  **Acceptance**: Console auto-scrolls; scrolling up pauses auto-scroll; scrolling to bottom resumes it. Copy button copies all raw text to clipboard.
 
-- [ ] 5.6 **Implement preset management in command bar** `[S]`
-  **What**: Clicking a preset chip loads its command into the command TextBox. "+ add preset" chip opens a small dialog/flyout to create a new preset from the current command.
-  **Files**: `src/Grove/ViewModels/WorktreeDetailViewModel.cs`, `src/Grove/Views/WorktreeDetailView.axaml`
-  **Acceptance**: Clicking preset fills command. Adding preset saves to config and appears in strip.
+- [x] **5.4 Command persistence and preset loading** `[S]`
+  **What**: When a command is run, persist it to config for that worktree. When a preset chip is clicked, load the command into the text box. Ensure the command bar shows the last-used command when re-selecting a worktree.
+  **Files**:
+  - `src/Grove/ViewModels/WorktreeDetailViewModel.cs` (verify — already in 3.4)
+  **Key code**: Already implemented in 3.4's `SaveWorktreeCommand()` and `LoadPresetCommand`.
+  **Acceptance**: Run a command, close and reopen the worktree detail — command is preserved. Click a preset chip — command text updates.
+
+- [x] **5.5 Error handling and process exit codes** `[M]`
+  **What**: Handle process errors gracefully. Non-zero exit code → error state with red indicator. Display exit code in console. Handle process spawn failures (e.g. command not found) with user-friendly error message in console.
+  **Files**:
+  - `src/Grove.Core/Services/ProcessRunner.cs` (modify)
+  - `src/Grove/ViewModels/WorktreeDetailViewModel.cs` (modify)
+  **Key code**:
+  ```csharp
+  // In ProcessRunner, on exit:
+  exited.Subscribe(_ =>
+  {
+      var exitCode = process.ExitCode;
+      _output.OnNext($"\n[grove] Process exited with code {exitCode}");
+      _status.OnNext(exitCode == 0 ? ProcessStatus.Idle : ProcessStatus.Error);
+      CleanupProcess();
+  });
+
+  // In DoRun, wrap in try-catch:
+  private void DoRun()
+  {
+      try
+      {
+          var psi = _shell.CreateStartInfo(Command, _info.Path, envOverrides);
+          var runner = _processManager.GetOrCreate(_info.Path);
+          runner.Start(psi);
+          SaveWorktreeCommand();
+      }
+      catch (Exception ex)
+      {
+          // Push error to console buffer directly
+          _consoleBuffer.AddLine($"[grove] Failed to start process: {ex.Message}");
+      }
+  }
+  ```
+  **Acceptance**: Running an invalid command shows error in console; exit code is displayed; status dot turns red on non-zero exit.
+
+- [x] **5.6 Environment variable merging** `[S]`
+  **What**: Ensure per-worktree environment variable overrides are correctly merged when spawning processes. System env vars are inherited; overrides take precedence.
+  **Files**:
+  - `src/Grove.Core/Services/ShellService.cs` (verify — already in 2.3)
+  **Key code**: Already implemented in `ShellService.CreateStartInfo()` — the `ProcessStartInfo.Environment` dictionary inherits system env vars by default; we just add overrides on top.
+  **Acceptance**: Set `PORT=3001` as env override for a worktree; run `echo %PORT%` (Windows) or `echo $PORT` (Unix) — output shows "3001".
 
 ---
 
 ### Phase 6: System Tray & Platform
 
-- [ ] 6.1 **Implement TrayIcon in App.axaml** `[M]`
-  **What**: Define the system tray icon with a context menu. The tray icon shows aggregate process status.
-  **Files**: `src/Grove/App.axaml`, `src/Grove/App.axaml.cs`
-  **AXAML**:
+- [x] **6.1 System tray icon** `[L]`
+  **What**: Implement system tray (notification area) icon using Avalonia's `TrayIcon` API. Tray icon shows aggregate status: green if any process running and none errored, red if any errored, grey if all idle. Clicking the tray icon shows/hides the main window.
+  **Files**:
+  - `src/Grove/App.axaml` (modify — add TrayIcon)
+  - `src/Grove/App.axaml.cs` (modify — tray icon logic)
+  - `src/Grove/Assets/tray-idle.ico` (new)
+  - `src/Grove/Assets/tray-running.ico` (new)
+  - `src/Grove/Assets/tray-error.ico` (new)
+  **Key code**:
   ```xml
+  <!-- App.axaml -->
+  <Application.Styles>
+    <FluentTheme />
+    <StyleInclude Source="/Styles/GroveTheme.axaml" />
+  </Application.Styles>
+
   <TrayIcon.Icons>
     <TrayIcons>
-      <TrayIcon Icon="/Assets/grove-icon.ico"
+      <TrayIcon Icon="/Assets/tray-idle.ico"
                 ToolTipText="Grove"
-                Command="{Binding ShowWindowCommand}">
+                Command="{Binding ToggleWindowCommand}">
         <TrayIcon.Menu>
           <NativeMenu>
-            <!-- Dynamic: list of running processes -->
             <NativeMenuItem Header="Show Grove" Command="{Binding ShowWindowCommand}" />
             <NativeMenuItemSeparator />
             <NativeMenuItem Header="Quit" Command="{Binding QuitCommand}" />
@@ -745,125 +2094,337 @@ Deliver a fully functional v1 of Grove matching the design document and UI mocku
     </TrayIcons>
   </TrayIcon.Icons>
   ```
-  **Behavior**:
-  - Clicking tray icon shows/focuses the window.
-  - Context menu lists running processes (worktree branch names) with stop option.
-  - "Quit" stops all processes and exits.
-  - Tray icon color/state: ideally swap icon based on aggregate status (green/red/grey). If icon swapping is complex, use ToolTipText to indicate status.
-  **Acceptance**: Tray icon appears. Context menu works. Click shows window.
-
-- [ ] 6.2 **Implement window close → minimize to tray** `[M]`
-  **What**: Override window close behavior. Instead of exiting, hide the window and keep running in the background. Only truly exit via tray "Quit" or when no processes are running.
-  **Files**: `src/Grove/MainWindow.axaml.cs`
-  **Implementation**:
   ```csharp
+  // In App.axaml.cs — subscribe to aggregate status to swap tray icon
+  _processManager.AggregateStatus
+      .ObserveOn(RxApp.MainThreadScheduler)
+      .Subscribe(status =>
+      {
+          var icon = status switch
+          {
+              ProcessStatus.Running => new WindowIcon(AssetLoader.Open(new Uri("avares://Grove/Assets/tray-running.ico"))),
+              ProcessStatus.Error => new WindowIcon(AssetLoader.Open(new Uri("avares://Grove/Assets/tray-error.ico"))),
+              _ => new WindowIcon(AssetLoader.Open(new Uri("avares://Grove/Assets/tray-idle.ico"))),
+          };
+          // Update tray icon
+      });
+  ```
+  **Acceptance**: Tray icon appears; changes color based on aggregate process status; clicking shows/hides window.
+
+- [x] **6.2 Minimize to tray on close** `[M]`
+  **What**: Override the window close behavior: instead of exiting, hide the window and keep running in the background. Processes continue running. Only "Quit" from tray menu actually exits.
+  **Files**:
+  - `src/Grove/Views/MainWindow.axaml.cs` (modify)
+  - `src/Grove/App.axaml.cs` (modify)
+  **Key code**:
+  ```csharp
+  // MainWindow.axaml.cs
   protected override void OnClosing(WindowClosingEventArgs e)
   {
-      if (_processManager.Processes.Any(p => p.Value.Status == ProcessStatus.Running))
+      // Don't actually close — hide to tray
+      if (!_isQuitting)
       {
           e.Cancel = true;
-          this.Hide();
-          // Optionally show a notification: "Grove is still running in the tray"
+          Hide();
+      }
+      base.OnClosing(e);
+  }
+
+  // App.axaml.cs — Quit command
+  public ReactiveCommand<Unit, Unit> QuitCommand { get; }
+
+  // In initialization:
+  QuitCommand = ReactiveCommand.CreateFromTask(async () =>
+  {
+      await _processManager.StopAllAsync();
+      _isQuitting = true;
+      (ApplicationLifetime as IClassicDesktopStyleApplicationLifetime)?.Shutdown();
+  });
+  ```
+  **Acceptance**: Closing the window hides it (processes keep running); "Quit" from tray stops all processes and exits.
+
+- [x] **6.3 Tray context menu with running processes** `[M]`
+  **What**: The tray context menu shows a list of currently running processes (worktree branch names), plus "Show Grove" and "Quit" items. The list updates dynamically as processes start/stop.
+  **Files**:
+  - `src/Grove/App.axaml.cs` (modify)
+  - `src/Grove/Services/TrayMenuService.cs` (new)
+  **Key code**:
+  ```csharp
+  public sealed class TrayMenuService : IDisposable
+  {
+      private readonly IProcessManager _processManager;
+      private readonly NativeMenu _menu;
+      private readonly IDisposable _subscription;
+
+      public TrayMenuService(IProcessManager processManager, NativeMenu menu)
+      {
+          _processManager = processManager;
+          _menu = menu;
+
+          _subscription = _processManager.Connect()
+              .AutoRefreshOnObservable(r => r.Status)
+              .Filter(r => r.CurrentStatus == ProcessStatus.Running)
+              .ToCollection()
+              .ObserveOn(RxApp.MainThreadScheduler)
+              .Subscribe(runners => RebuildMenu(runners));
+      }
+
+      private void RebuildMenu(IReadOnlyCollection<IProcessRunner> runners)
+      {
+          _menu.Items.Clear();
+          foreach (var runner in runners)
+          {
+              _menu.Items.Add(new NativeMenuItem(
+                  $"● {Path.GetFileName(runner.WorktreePath)}"));
+          }
+          if (runners.Any())
+              _menu.Items.Add(new NativeMenuItemSeparator());
+          _menu.Items.Add(new NativeMenuItem("Show Grove") { /* command */ });
+          _menu.Items.Add(new NativeMenuItemSeparator());
+          _menu.Items.Add(new NativeMenuItem("Quit") { /* command */ });
+      }
+  }
+  ```
+  **Acceptance**: Tray menu shows running processes; list updates when processes start/stop.
+
+- [x] **6.4 Platform-aware process termination** `[M]`
+  **What**: Ensure process termination works correctly on both Windows and Unix. Windows: use `taskkill /PID {pid} /T` for graceful, then `taskkill /PID {pid} /T /F` for force. Unix: SIGTERM then SIGKILL. Handle process tree killing (child processes).
+  **Files**:
+  - `src/Grove.Core/Services/ProcessRunner.cs` (modify — refine StopAsync)
+  **Key code**:
+  ```csharp
+  public async Task StopAsync(TimeSpan? gracePeriod = null)
+  {
+      if (_process is null || _process.HasExited) return;
+      var grace = gracePeriod ?? TimeSpan.FromSeconds(5);
+
+      _status.OnNext(ProcessStatus.Stopped);
+
+      if (OperatingSystem.IsWindows())
+      {
+          // Graceful: taskkill without /F sends WM_CLOSE / CTRL_C
+          await RunTaskkillAsync(_process.Id, force: false);
+          var exited = await WaitForExitAsync(_process, grace);
+          if (!exited)
+          {
+              // Force: taskkill with /F and /T (tree kill)
+              await RunTaskkillAsync(_process.Id, force: true);
+          }
       }
       else
       {
-          // No running processes — actually close
-          base.OnClosing(e);
+          _process.Kill(false); // SIGTERM
+          var exited = await WaitForExitAsync(_process, grace);
+          if (!exited)
+              _process.Kill(true); // SIGKILL + children
+      }
+
+      CleanupProcess();
+  }
+
+  private static async Task RunTaskkillAsync(int pid, bool force)
+  {
+      var args = force ? $"/PID {pid} /T /F" : $"/PID {pid} /T";
+      using var p = Process.Start(new ProcessStartInfo("taskkill", args)
+      {
+          CreateNoWindow = true, UseShellExecute = false,
+          RedirectStandardOutput = true, RedirectStandardError = true
+      });
+      if (p is not null) await p.WaitForExitAsync();
+  }
+  ```
+  **Acceptance**: Stopping a process on Windows kills the entire process tree. On Unix, SIGTERM is sent first, then SIGKILL after timeout.
+
+- [x] **6.5 Folder picker integration** `[S]`
+  **What**: Implement folder picker for "Add Root" functionality using Avalonia's `StorageProvider` API (the modern replacement for `OpenFolderDialog`).
+  **Files**:
+  - `src/Grove/ViewModels/SettingsViewModel.cs` (modify — AddRootAsync)
+  - `src/Grove/Services/IDialogService.cs` (new)
+  - `src/Grove/Services/DialogService.cs` (new)
+  **Key code**:
+  ```csharp
+  public interface IDialogService
+  {
+      Task<string?> PickFolderAsync(string title);
+  }
+
+  public class DialogService : IDialogService
+  {
+      private readonly Window _owner;
+
+      public DialogService(Window owner) => _owner = owner;
+
+      public async Task<string?> PickFolderAsync(string title)
+      {
+          var result = await _owner.StorageProvider.OpenFolderPickerAsync(
+              new FolderPickerOpenOptions { Title = title, AllowMultiple = false });
+          return result.FirstOrDefault()?.Path.LocalPath;
       }
   }
   ```
-  **Acceptance**: Closing window with running processes hides to tray. Closing with no processes exits.
+  **Acceptance**: Clicking "Add Root" opens a native folder picker; selected path is added to config.
 
-- [ ] 6.3 **Implement Quit command (stop all + exit)** `[S]`
-  **What**: When user clicks "Quit" from tray, stop all running processes gracefully, then exit the application.
-  **Files**: `src/Grove/App.axaml.cs` or `src/Grove/ViewModels/TrayViewModel.cs`
-  **Implementation**:
+- [x] **6.6 Theme switching at runtime** `[M]`
+  **What**: Implement runtime theme switching between Light, Dark, and System. Use Avalonia's `RequestedThemeVariant` on the `Application` object. Persist the choice to config.
+  **Files**:
+  - `src/Grove/App.axaml.cs` (modify)
+  - `src/Grove/ViewModels/SettingsViewModel.cs` (modify — theme change handler)
+  **Key code**:
   ```csharp
-  [RelayCommand]
-  private async Task QuitAsync()
+  // In App.axaml.cs or a ThemeService
+  public void ApplyTheme(AppTheme theme)
   {
-      _processManager.StopAll();
-      // Wait briefly for graceful shutdown
-      await Task.Delay(1000);
-      // Force kill any remaining
-      Environment.Exit(0);
+      RequestedThemeVariant = theme switch
+      {
+          AppTheme.Light => ThemeVariant.Light,
+          AppTheme.Dark => ThemeVariant.Dark,
+          AppTheme.System => ThemeVariant.Default,
+          _ => ThemeVariant.Dark
+      };
+  }
+
+  // In SettingsViewModel, react to theme changes:
+  this.WhenAnyValue(x => x.Theme)
+      .Skip(1)
+      .Subscribe(theme => _themeService.ApplyTheme(theme));
+  ```
+  **Acceptance**: Changing theme in settings immediately updates the UI; choice persists across restarts.
+
+- [x] **6.7 Add worktree via git CLI** `[M]`
+  **What**: Implement the `AddWorktreeAsync` method in `GitService`. Runs `git worktree add <path> <branch>`. Handles errors (branch already exists, path conflict). After creation, refreshes the worktree list.
+  **Files**:
+  - `src/Grove.Core/Services/GitService.cs` (modify — implement AddWorktreeAsync)
+  **Key code**:
+  ```csharp
+  public async Task<WorktreeInfo?> AddWorktreeAsync(
+      string repoPath, string branchName, string? path = null, CancellationToken ct = default)
+  {
+      var targetPath = path ?? Path.Combine(
+          Path.GetDirectoryName(repoPath)!,
+          $"{Path.GetFileName(repoPath)}-{branchName.Replace("/", "-")}");
+
+      var psi = new ProcessStartInfo("git", $"worktree add \"{targetPath}\" {branchName}")
+      {
+          WorkingDirectory = repoPath,
+          RedirectStandardOutput = true,
+          RedirectStandardError = true,
+          UseShellExecute = false,
+          CreateNoWindow = true,
+      };
+
+      using var proc = Process.Start(psi)!;
+      var stderr = await proc.StandardError.ReadToEndAsync(ct);
+      await proc.WaitForExitAsync(ct);
+
+      if (proc.ExitCode != 0)
+          throw new InvalidOperationException($"git worktree add failed: {stderr}");
+
+      // Return the newly created worktree info
+      var worktrees = await GetWorktreesAsync(repoPath, ct);
+      return worktrees.FirstOrDefault(w => w.Path == targetPath);
   }
   ```
-  **Acceptance**: All processes stop. App exits cleanly.
+  **Acceptance**: "Add worktree" dialog creates a new worktree; it appears in the sidebar after refresh.
 
-- [ ] 6.4 **Platform-specific shell execution** `[S]`
-  **What**: Ensure `ProcessManager` uses the correct shell for the platform. Already designed in 2.4 but verify and test.
-  **Files**: `src/Grove.Core/Services/ProcessManager.cs`
-  **Details**:
-  - Windows: `FileName = "cmd.exe"`, `Arguments = $"/c {command}"`
-  - Unix: `FileName = "/bin/sh"`, `Arguments = $"-c \"{command}\""`
-  - Detect via `RuntimeInformation.IsOSPlatform(OSPlatform.Windows)`
-  **Acceptance**: Commands execute correctly on Windows. (Unix testing deferred to CI or manual.)
-
-- [ ] 6.5 **Platform-specific process termination** `[M]`
-  **What**: Ensure process tree kill works correctly on both platforms.
-  **Files**: `src/Grove.Core/Services/ProcessManager.cs`
-  **Details**:
-  - .NET's `Process.Kill(entireProcessTree: true)` should work on both platforms (.NET 10).
-  - Graceful stop: on Windows, try `GenerateConsoleCtrlEvent` (Ctrl+C) first via P/Invoke, fall back to Kill. On Unix, `Process.Kill()` sends SIGTERM by default (verify), then SIGKILL after timeout.
-  - Simpler approach for v1: just use `Process.Kill(entireProcessTree: true)` with a grace period. Ctrl+C signal is a v2 enhancement.
-  **Acceptance**: Stopping a process kills the entire process tree (e.g., npm → node child processes).
-
-- [ ] 6.6 **Implement "Add Worktree" dialog** `[M]`
-  **What**: The "+ add worktree" button in the sidebar opens a dialog to create a new git worktree. User enters branch name and optionally a base branch. Runs `git worktree add`.
+- [x] **6.8 Upstream branch detection** `[S]`
+  **What**: Implement `GetUpstreamBranchAsync` in `GitService` to get the upstream tracking branch for a worktree (e.g. `origin/main`). Displayed in the detail header.
   **Files**:
-  - `src/Grove/Views/AddWorktreeDialog.axaml`
-  - `src/Grove/Views/AddWorktreeDialog.axaml.cs`
-  - `src/Grove/ViewModels/AddWorktreeViewModel.cs`
-  **Dialog fields**: Branch name (TextBox), base branch (ComboBox with existing branches), path (auto-generated or custom).
-  **Acceptance**: Creating a worktree via dialog adds it to the sidebar after refresh.
+  - `src/Grove.Core/Services/GitService.cs` (modify)
+  **Key code**:
+  ```csharp
+  public async Task<string?> GetUpstreamBranchAsync(string worktreePath, CancellationToken ct = default)
+  {
+      var psi = new ProcessStartInfo("git", "rev-parse --abbrev-ref @{upstream}")
+      {
+          WorkingDirectory = worktreePath,
+          RedirectStandardOutput = true,
+          RedirectStandardError = true,
+          UseShellExecute = false,
+          CreateNoWindow = true,
+      };
 
-- [ ] 6.7 **Implement "Add Root" folder picker** `[S]`
-  **What**: The "+ add root" button opens the system folder picker. Selected folder is added to config as a new root (default mode: repo). If the folder doesn't contain `.git`, prompt to use scan mode.
-  **Files**: `src/Grove/ViewModels/MainWindowViewModel.cs` (or `SettingsViewModel.cs`)
-  **Implementation**: Use Avalonia's `IStorageProvider.OpenFolderPickerAsync()`.
-  **Acceptance**: Folder picker opens. Selected folder appears as new root in sidebar.
+      using var proc = Process.Start(psi)!;
+      var output = await proc.StandardOutput.ReadToEndAsync(ct);
+      await proc.WaitForExitAsync(ct);
 
-- [ ] 6.8 **Handle first-launch experience** `[S]`
-  **What**: On first launch (no config file exists), show a welcome state prompting the user to add their first root. The sidebar shows the welcome message instead of an empty list.
-  **Files**: `src/Grove/Views/WelcomeView.axaml`, `src/Grove/ViewModels/MainWindowViewModel.cs`
-  **Acceptance**: First launch shows welcome prompt. After adding a root, normal UI appears.
+      return proc.ExitCode == 0 ? output.Trim() : null;
+  }
+  ```
+  **Acceptance**: Detail header shows "origin/main" (or similar) for worktrees with an upstream.
 
-- [ ] 6.9 **Dynamic tray menu with running processes** `[M]`
-  **What**: The tray context menu dynamically lists all currently running processes (branch name + status). Each entry can be clicked to show that worktree in the main window.
-  **Files**: `src/Grove/App.axaml.cs`
-  **Implementation**: Build `NativeMenu` items programmatically in code-behind, updating when process status changes. Avalonia's `NativeMenu` supports dynamic items.
-  **Acceptance**: Running processes appear in tray menu. Clicking one opens the window and selects that worktree.
+- [x] **6.9 App icon and assets** `[S]`
+  **What**: Create app icon (tree/grove themed), tray icons (colored variants for idle/running/error), and any other visual assets. Set the app icon in the project file and window.
+  **Files**:
+  - `src/Grove/Assets/grove-icon.ico` (new)
+  - `src/Grove/Assets/grove-icon.png` (new)
+  - `src/Grove/Assets/tray-idle.ico` (new)
+  - `src/Grove/Assets/tray-running.ico` (new)
+  - `src/Grove/Assets/tray-error.ico` (new)
+  - `src/Grove/Grove.csproj` (modify — set ApplicationIcon)
+  **Key code**:
+  ```xml
+  <!-- Grove.csproj -->
+  <PropertyGroup>
+    <ApplicationIcon>Assets/grove-icon.ico</ApplicationIcon>
+  </PropertyGroup>
+  <ItemGroup>
+    <AvaloniaResource Include="Assets\**" />
+  </ItemGroup>
+  ```
+  **Acceptance**: App window and taskbar show the Grove icon; tray icon renders correctly.
 
-- [ ] 6.10 **Final integration testing & polish** `[L]`
-  **What**: End-to-end testing of the complete application. Fix visual bugs, alignment issues, edge cases.
-  **Checklist**:
-  - [ ] Add a real git repo root → worktrees discovered and listed
-  - [ ] Add a scan-mode root → nested repos discovered
-  - [ ] Run `npm run dev` (or similar) → live output streams with colors
-  - [ ] Stop process → status updates, process tree killed
-  - [ ] Restart process → clean restart
-  - [ ] Switch between worktrees → detail panel updates, console shows correct output
-  - [ ] Add/edit/remove presets → persisted and reflected in command bar
-  - [ ] Per-worktree env vars → passed to spawned process
-  - [ ] Close window → tray icon, processes persist
-  - [ ] Reopen from tray → window shows, state preserved
-  - [ ] Quit from tray → all processes stopped, app exits
-  - [ ] Theme switching (dark/light/system)
-  - [ ] Console with 10K+ lines → no lag (virtualization works)
-  - [ ] Config survives restart (kill and relaunch)
-  **Acceptance**: All checklist items pass.
+- [x] **6.10 First-launch experience** `[M]`
+  **What**: On first launch (no config file exists), show a welcome state: empty sidebar with prominent "Add your first root" button/message. Guide the user to add a repo root via folder picker. After adding, auto-discover worktrees and populate the sidebar.
+  **Files**:
+  - `src/Grove/Views/EmptyStateView.axaml` (new)
+  - `src/Grove/Views/EmptyStateView.axaml.cs` (new)
+  - `src/Grove/ViewModels/MainWindowViewModel.cs` (modify — handle empty state)
+  **Key code**:
+  ```csharp
+  // In MainWindowViewModel
+  private readonly ObservableAsPropertyHelper<bool> _hasRoots;
+  public bool HasRoots => _hasRoots.Value;
+
+  // In constructor:
+  _hasRoots = _roots.CountChanged
+      .Select(count => count > 0)
+      .ToProperty(this, x => x.HasRoots);
+  ```
+  ```xml
+  <!-- In MainWindow.axaml, show empty state when no roots -->
+  <Panel Grid.Column="1" IsVisible="{Binding !HasRoots}">
+    <views:EmptyStateView />
+  </Panel>
+  ```
+  **Acceptance**: First launch shows empty state with "Add root" prompt; after adding a root, sidebar populates.
 
 ---
 
 ## Verification
 
-- [ ] `dotnet build Grove.sln` succeeds with no warnings (treat warnings as errors)
-- [ ] `dotnet test` — all unit tests pass (ConfigService, RingBuffer, AnsiParser, GitService parsing)
-- [ ] App launches on Windows without errors
-- [ ] Full workflow: add root → discover worktrees → run command → see output → stop → close to tray → quit
-- [ ] No memory leaks on long-running processes (check with dotnet-counters)
-- [ ] Console handles 10,000 lines without UI freeze
+- [x] `dotnet build Grove.sln` succeeds with zero warnings
+- [x] App launches on Windows with .NET 10
+- [x] Adding a repo root discovers worktrees and displays them in sidebar
+- [x] Selecting a worktree shows detail panel with correct branch/path/upstream
+- [x] Running a command starts the process; console shows live output
+- [x] ANSI colors render correctly in console (test with `npm test` or colored output)
+- [x] Stop button terminates the process; status changes to idle
+- [x] Restart button stops then starts the process
+- [x] Status dots in sidebar update in real-time (green/grey/red)
+- [x] Preset chips load commands into the command bar
+- [x] Closing the window minimizes to system tray
+- [x] Tray icon color reflects aggregate process status
+- [x] Tray context menu shows running processes
+- [x] "Quit" from tray stops all processes and exits the app
+- [x] Settings page: add/remove roots works
+- [x] Settings page: add/edit/remove presets works
+- [x] Settings page: theme switching works (light/dark/system)
+- [x] Config persists across app restarts
+- [x] Console ring buffer caps at 10,000 lines (no memory leak)
+- [x] Console auto-scrolls; pauses when user scrolls up
+- [x] No CommunityToolkit.Mvvm references anywhere in the codebase
+- [x] All ViewModels extend `ReactiveObject` (not `ObservableObject`)
+- [x] All commands are `ReactiveCommand` (not `RelayCommand`)
 
 ---
 
@@ -871,23 +2432,81 @@ Deliver a fully functional v1 of Grove matching the design document and UI mocku
 
 ```
 Phase 1 (Scaffolding)
-  └─► Phase 2 (Core Services) — models first, then services
-        ├─► Phase 3 (ViewModels) — depends on service interfaces
-        │     └─► Phase 4 (Views) — depends on ViewModels
-        │           └─► Phase 5 (Process Integration) — wires everything together
-        └─► Phase 5 also depends directly on Phase 2 services
-              └─► Phase 6 (Tray & Platform) — final layer, depends on all above
+  └── 1.1 Solution + App ──┐
+  └── 1.2 Core Library ────┤
+  └── 1.3 NuGet Packages ──┤
+  └── 1.6 Build Props ─────┤
+  └── 1.7 .gitignore ──────┤
+      ├───────────────────> 1.4 DI Container ──> 1.5 Folder Structure
+      │
+Phase 2 (Core Services) ── depends on Phase 1
+  └── 2.1 Models ──────────┐
+      ├──────────────────> 2.2 Config Service
+      ├──────────────────> 2.3 Shell Service
+      ├──────────────────> 2.4 Git Service (depends on 2.3)
+      ├──────────────────> 2.7 ANSI Parser
+      │
+      ├── 2.5 Process Runner (depends on 2.3)
+      │     └──> 2.6 Process Manager (depends on 2.5)
+      │
+      └── 2.8 Console Buffer (depends on 2.7)
+
+Phase 3 (ViewModels) ───── depends on Phase 2
+  └── 3.7 ViewModelBase ───┐
+      ├──────────────────> 3.3 WorktreeViewModel
+      ├──────────────────> 3.2 RootViewModel (depends on 3.3)
+      ├──────────────────> 3.4 WorktreeDetailViewModel (depends on 2.5, 2.6, 2.8)
+      ├──────────────────> 3.5 SettingsViewModel
+      ├──────────────────> 3.6 AddWorktreeViewModel
+      └──────────────────> 3.1 MainWindowViewModel (depends on 3.2, 3.3, 3.4, 3.5)
+
+Phase 4 (Views) ────────── depends on Phase 3
+  └── 4.1 Theme + Styles ──┐
+  └── 4.7 Status Styles ───┤
+  └── 4.10 Converters ─────┤
+  └── 4.11 ViewLocator ────┤
+      ├──────────────────> 4.2 MainWindow
+      ├──────────────────> 4.3 SidebarView
+      ├──────────────────> 4.6 ConsoleLineControl
+      │                      └──> 4.5 ConsoleView (depends on 4.6)
+      │                             └──> 4.4 WorktreeDetailView (depends on 4.5)
+      ├──────────────────> 4.8 SettingsView
+      └──────────────────> 4.9 AddWorktreeDialog
+
+Phase 5 (Integration) ──── depends on Phase 3 + 4
+  └── 5.1 Wire process to console
+  └── 5.2 Process lifecycle (sidebar status)
+  └── 5.3 Console auto-scroll + copy
+  └── 5.4 Command persistence
+  └── 5.5 Error handling
+  └── 5.6 Env var merging
+
+Phase 6 (Platform) ─────── depends on Phase 5
+  └── 6.1 System tray icon
+  └── 6.2 Minimize to tray
+  └── 6.3 Tray context menu (depends on 6.1)
+  └── 6.4 Platform process termination
+  └── 6.5 Folder picker
+  └── 6.6 Theme switching
+  └── 6.7 Add worktree (git CLI)
+  └── 6.8 Upstream branch detection
+  └── 6.9 App icon + assets
+  └── 6.10 First-launch experience
 ```
 
-Within phases, the task numbering reflects internal dependencies (e.g., 2.1 models before 2.2 config service).
+---
 
 ## Risk Register
 
-| Risk | Impact | Mitigation |
-|------|--------|------------|
-| ANSI rendering performance with 10K lines | High | Use `ItemsRepeater` virtualization. Profile early. Fall back to plain text if needed. |
-| `SelectableTextBlock.Inlines` not bindable | Medium | Use code-behind or attached property to set Inlines programmatically instead of binding. |
-| Process tree kill not working on Windows | High | Test with `npm run dev` (spawns child node process). Use `Process.Kill(entireProcessTree: true)`. Fall back to `taskkill /T /F /PID`. |
-| Avalonia TrayIcon not working on all Linux DEs | Low | Document supported platforms. TrayIcon is optional — app still works without it. |
-| .NET 10 + Avalonia compatibility | Medium | Use latest Avalonia 11.x stable. Test early in Phase 1. |
-| Large scan-mode roots (thousands of repos) | Medium | Limit scan depth to 3. Add progress indicator. Make scan async with cancellation. |
+| # | Risk | Impact | Likelihood | Mitigation |
+|---|------|--------|------------|------------|
+| 1 | **Avalonia 11.2 doesn't support net10.0 TFM** | High | Medium | Fall back to `net9.0` if needed; Avalonia 11.2 targets `netstandard2.0` so it should work. Test early in Phase 1. |
+| 2 | **Process tree killing on Windows is unreliable** | Medium | Medium | Use `taskkill /T /F` as fallback; consider using Job Objects via P/Invoke if taskkill is insufficient. |
+| 3 | **ANSI parser doesn't handle all escape sequences** | Low | High | Start with SGR (colors/styles) only; ignore cursor movement, screen clearing, etc. Log unhandled sequences for future improvement. |
+| 4 | **ItemsRepeater performance with 10,000 console lines** | Medium | Medium | Use virtualization (ItemsRepeater handles this). If still slow, switch to a custom `DrawingContext`-based renderer that draws visible lines only. |
+| 5 | **System tray API differences across platforms** | Medium | Low | Avalonia's `TrayIcon` abstracts this. Test on Windows first (primary target). |
+| 6 | **DynamicData thread safety with process output** | High | Medium | Always use `.ObserveOn(RxApp.MainThreadScheduler)` before `.Bind()`. Use `SourceList.Edit()` for batch mutations. |
+| 7 | **ReactiveUI ViewLocator conflicts with DI** | Low | Medium | Use a custom `ViewLocator` that resolves from the DI container, or keep the convention-based one and register views manually if needed. |
+| 8 | **Config file corruption on concurrent writes** | Low | Low | Use a write lock (SemaphoreSlim) in `ConfigService.SaveAsync()`. Throttle saves with Rx. |
+| 9 | **Scan mode discovers too many repos (deep directory trees)** | Medium | Medium | Add a max depth limit (default 3). Show progress indicator during scan. Allow cancellation. |
+| 10 | **Template generates CommunityToolkit code** | Low | Low | The `-m ReactiveUI` flag should generate ReactiveUI code. Verify immediately in Phase 1 and remove any CommunityToolkit references. |

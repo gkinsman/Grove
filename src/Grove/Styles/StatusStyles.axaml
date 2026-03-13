@@ -1,0 +1,25 @@
+<Styles xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+  <!-- Status badge border -->
+  <Style Selector="Border.status-badge">
+    <Setter Property="BorderThickness" Value="1" />
+    <Setter Property="CornerRadius" Value="12" />
+    <Setter Property="Padding" Value="12,4" />
+    <Setter Property="BorderBrush" Value="{DynamicResource StatusIdleBrush}" />
+    <Setter Property="Background" Value="Transparent" />
+  </Style>
+  <Style Selector="Border.status-badge.running">
+    <Setter Property="BorderBrush" Value="{DynamicResource StatusRunningBrush}" />
+    <Setter Property="Background" Value="#1A4EC9B0" />
+  </Style>
+  <Style Selector="Border.status-badge.error">
+    <Setter Property="BorderBrush" Value="{DynamicResource StatusErrorBrush}" />
+    <Setter Property="Background" Value="#1AF44747" />
+  </Style>
+  <Style Selector="Border.status-badge.starting">
+    <Setter Property="BorderBrush" Value="{DynamicResource StatusStartingBrush}" />
+    <Setter Property="Background" Value="#1ADCDCAA" />
+  </Style>
+
+</Styles>

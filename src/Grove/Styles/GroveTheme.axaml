@@ -1,0 +1,89 @@
+<Styles xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+  <!-- Sidebar action buttons (add worktree / add root) -->
+  <Style Selector="Button.sidebar-action">
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="Foreground" Value="{DynamicResource SidebarGroupHeaderBrush}" />
+    <Setter Property="BorderThickness" Value="0" />
+    <Setter Property="Padding" Value="8,6" />
+    <Setter Property="HorizontalAlignment" Value="Stretch" />
+    <Setter Property="HorizontalContentAlignment" Value="Left" />
+    <Setter Property="FontSize" Value="12" />
+    <Setter Property="Cursor" Value="Hand" />
+  </Style>
+  <Style Selector="Button.sidebar-action:pointerover /template/ ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource SidebarItemHoverBrush}" />
+  </Style>
+
+  <!-- Root header buttons -->
+  <Style Selector="Button.root-header">
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="BorderThickness" Value="0" />
+    <Setter Property="Padding" Value="16,6,8,6" />
+    <Setter Property="HorizontalAlignment" Value="Stretch" />
+    <Setter Property="HorizontalContentAlignment" Value="Left" />
+    <Setter Property="Cursor" Value="Hand" />
+  </Style>
+  <Style Selector="Button.root-header:pointerover /template/ ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource SidebarItemHoverBrush}" />
+  </Style>
+
+  <!-- Worktree entry buttons -->
+  <Style Selector="Button.worktree-entry">
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="BorderThickness" Value="0" />
+    <Setter Property="Padding" Value="24,6,8,6" />
+    <Setter Property="HorizontalAlignment" Value="Stretch" />
+    <Setter Property="HorizontalContentAlignment" Value="Left" />
+    <Setter Property="Cursor" Value="Hand" />
+  </Style>
+  <Style Selector="Button.worktree-entry:pointerover /template/ ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource SidebarItemHoverBrush}" />
+  </Style>
+  <Style Selector="Button.worktree-entry.selected /template/ ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource SidebarItemSelectedBrush}" />
+  </Style>
+
+  <!-- Preset chip buttons -->
+  <Style Selector="Button.preset-chip">
+    <Setter Property="Background" Value="#313244" />
+    <Setter Property="Foreground" Value="{DynamicResource SidebarForegroundBrush}" />
+    <Setter Property="BorderThickness" Value="0" />
+    <Setter Property="Padding" Value="10,4" />
+    <Setter Property="CornerRadius" Value="12" />
+    <Setter Property="FontSize" Value="12" />
+    <Setter Property="Cursor" Value="Hand" />
+    <Setter Property="Margin" Value="0,0,6,4" />
+  </Style>
+  <Style Selector="Button.preset-chip:pointerover /template/ ContentPresenter">
+    <Setter Property="Background" Value="#45475A" />
+  </Style>
+
+  <!-- Status badge -->
+  <Style Selector="Border.status-badge">
+    <Setter Property="Background" Value="#313244" />
+    <Setter Property="Padding" Value="10,4" />
+    <Setter Property="CornerRadius" Value="4" />
+  </Style>
+  <Style Selector="Border.status-badge.running">
+    <Setter Property="Background" Value="#1A3A2A" />
+  </Style>
+
+  <!-- Console TextBlock -->
+  <Style Selector="TextBlock.console-line">
+    <Setter Property="FontFamily" Value="Cascadia Code,Cascadia Mono,Consolas,Courier New,monospace" />
+    <Setter Property="FontSize" Value="13" />
+    <Setter Property="Foreground" Value="{DynamicResource ConsoleForegroundBrush}" />
+    <Setter Property="TextWrapping" Value="NoWrap" />
+  </Style>
+
+  <!-- Section label -->
+  <Style Selector="TextBlock.section-label">
+    <Setter Property="FontSize" Value="11" />
+    <Setter Property="Opacity" Value="0.5" />
+    <Setter Property="FontWeight" Value="SemiBold" />
+    <Setter Property="LetterSpacing" Value="1" />
+  </Style>
+
+</Styles>

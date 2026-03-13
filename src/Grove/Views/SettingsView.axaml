@@ -1,0 +1,98 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:Grove.ViewModels"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             mc:Ignorable="d" d:DesignWidth="800" d:DesignHeight="700"
+             x:Class="Grove.Views.SettingsView"
+             x:DataType="vm:SettingsViewModel">
+
+    <Border Background="{DynamicResource DetailBackgroundBrush}" Padding="32">
+        <StackPanel Spacing="24">
+            <TextBlock Text="Settings"
+                       FontSize="24"
+                       FontWeight="Bold"
+                       Foreground="{DynamicResource SidebarForegroundBrush}" />
+
+            <!-- Default Command -->
+            <StackPanel Spacing="8">
+                <TextBlock Text="DEFAULT COMMAND"
+                           Classes="section-label"
+                           Foreground="{DynamicResource SidebarForegroundBrush}" />
+                <TextBox Text="{Binding DefaultCommand}"
+                         Watermark="e.g. npm run dev"
+                         FontFamily="Cascadia Code,Consolas,monospace" />
+            </StackPanel>
+
+            <!-- Auto Start -->
+            <StackPanel Orientation="Horizontal" Spacing="12">
+                <CheckBox IsChecked="{Binding AutoStart}" />
+                <TextBlock Text="Auto-start command when worktree is selected"
+                           Foreground="{DynamicResource SidebarForegroundBrush}"
+                           VerticalAlignment="Center" />
+            </StackPanel>
+
+            <!-- Roots -->
+            <StackPanel Spacing="8">
+                <StackPanel Orientation="Horizontal" Spacing="12">
+                    <TextBlock Text="ROOTS"
+                               Classes="section-label"
+                               Foreground="{DynamicResource SidebarForegroundBrush}" />
+                    <Button Content="+ Add Root"
+                            Command="{Binding AddRootCommand}"
+                            Classes="preset-chip" />
+                </StackPanel>
+                <ItemsControl ItemsSource="{Binding Roots}">
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate>
+                            <Grid ColumnDefinitions="*,Auto" Margin="0,4">
+                                <TextBlock Text="{Binding Path}"
+                                           Foreground="{DynamicResource SidebarForegroundBrush}"
+                                           VerticalAlignment="Center" />
+                                <Button Grid.Column="1"
+                                        Content="Remove"
+                                        Command="{Binding $parent[UserControl].((vm:SettingsViewModel)DataContext).RemoveRootCommand}"
+                                        CommandParameter="{Binding}"
+                                        Classes="preset-chip" />
+                            </Grid>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+            </StackPanel>
+
+            <!-- Presets -->
+            <StackPanel Spacing="8">
+                <StackPanel Orientation="Horizontal" Spacing="12">
+                    <TextBlock Text="PRESETS"
+                               Classes="section-label"
+                               Foreground="{DynamicResource SidebarForegroundBrush}" />
+                    <Button Content="+ Add Preset"
+                            Command="{Binding AddPresetCommand}"
+                            Classes="preset-chip" />
+                </StackPanel>
+                <ItemsControl ItemsSource="{Binding PresetList}">
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate>
+                            <Grid ColumnDefinitions="*,*,Auto" Margin="0,4">
+                                <TextBox Text="{Binding Name}"
+                                         Watermark="Preset name"
+                                         Margin="0,0,8,0" />
+                                <TextBox Grid.Column="1"
+                                         Text="{Binding Command}"
+                                         Watermark="Command"
+                                         FontFamily="Cascadia Code,Consolas,monospace"
+                                         Margin="0,0,8,0" />
+                                <Button Grid.Column="2"
+                                        Content="Remove"
+                                        Command="{Binding $parent[UserControl].((vm:SettingsViewModel)DataContext).RemovePresetCommand}"
+                                        CommandParameter="{Binding}"
+                                        Classes="preset-chip" />
+                            </Grid>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+            </StackPanel>
+        </StackPanel>
+    </Border>
+
+</UserControl>

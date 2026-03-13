@@ -1,0 +1,48 @@
+<ResourceDictionary xmlns="https://github.com/avaloniaui"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+  <!-- Sidebar -->
+  <Color x:Key="SidebarBackground">#1E1E2E</Color>
+  <Color x:Key="SidebarForeground">#CDD6F4</Color>
+  <Color x:Key="SidebarGroupHeader">#A6ADC8</Color>
+  <Color x:Key="SidebarItemHover">#2A2A3E</Color>
+  <Color x:Key="SidebarItemSelected">#313244</Color>
+
+  <!-- Console -->
+  <Color x:Key="ConsoleBackground">#11111B</Color>
+  <Color x:Key="ConsoleForeground">#CDD6F4</Color>
+
+  <!-- Status dots -->
+  <Color x:Key="StatusRunning">#4EC9B0</Color>
+  <Color x:Key="StatusIdle">#808080</Color>
+  <Color x:Key="StatusError">#F44747</Color>
+  <Color x:Key="StatusStarting">#DCDCAA</Color>
+
+  <!-- Accent -->
+  <Color x:Key="AccentGreen">#4EC9B0</Color>
+  <Color x:Key="DetailBackground">#181825</Color>
+  <Color x:Key="DetailHeaderBackground">#1E1E2E</Color>
+  <Color x:Key="CommandBarBackground">#1E1E2E</Color>
+  <Color x:Key="BorderColor">#313244</Color>
+
+  <!-- Status brushes -->
+  <SolidColorBrush x:Key="StatusRunningBrush" Color="{StaticResource StatusRunning}" />
+  <SolidColorBrush x:Key="StatusIdleBrush" Color="{StaticResource StatusIdle}" />
+  <SolidColorBrush x:Key="StatusErrorBrush" Color="{StaticResource StatusError}" />
+  <SolidColorBrush x:Key="StatusStartingBrush" Color="{StaticResource StatusStarting}" />
+
+  <!-- SolidColorBrushes -->
+  <SolidColorBrush x:Key="SidebarBackgroundBrush" Color="{StaticResource SidebarBackground}" />
+  <SolidColorBrush x:Key="SidebarForegroundBrush" Color="{StaticResource SidebarForeground}" />
+  <SolidColorBrush x:Key="SidebarGroupHeaderBrush" Color="{StaticResource SidebarGroupHeader}" />
+  <SolidColorBrush x:Key="SidebarItemHoverBrush" Color="{StaticResource SidebarItemHover}" />
+  <SolidColorBrush x:Key="SidebarItemSelectedBrush" Color="{StaticResource SidebarItemSelected}" />
+  <SolidColorBrush x:Key="ConsoleBackgroundBrush" Color="{StaticResource ConsoleBackground}" />
+  <SolidColorBrush x:Key="ConsoleForegroundBrush" Color="{StaticResource ConsoleForeground}" />
+  <SolidColorBrush x:Key="DetailBackgroundBrush" Color="{StaticResource DetailBackground}" />
+  <SolidColorBrush x:Key="DetailHeaderBackgroundBrush" Color="{StaticResource DetailHeaderBackground}" />
+  <SolidColorBrush x:Key="CommandBarBackgroundBrush" Color="{StaticResource CommandBarBackground}" />
+  <SolidColorBrush x:Key="BorderBrush" Color="{StaticResource BorderColor}" />
+  <SolidColorBrush x:Key="AccentGreenBrush" Color="{StaticResource AccentGreen}" />
+
+</ResourceDictionary>

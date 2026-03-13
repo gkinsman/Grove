@@ -1,0 +1,47 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:Grove.ViewModels"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             mc:Ignorable="d" d:DesignWidth="800" d:DesignHeight="700"
+             x:Class="Grove.Views.EmptyStateView"
+             x:DataType="vm:MainWindowViewModel">
+
+    <Border Background="{DynamicResource DetailBackgroundBrush}">
+        <StackPanel HorizontalAlignment="Center"
+                    VerticalAlignment="Center"
+                    Spacing="24"
+                    MaxWidth="400">
+
+            <TextBlock Text="grove"
+                       FontSize="48"
+                       FontWeight="Bold"
+                       HorizontalAlignment="Center"
+                       Foreground="{DynamicResource AccentGreenBrush}" />
+
+            <TextBlock Text="A git worktree manager"
+                       FontSize="16"
+                       HorizontalAlignment="Center"
+                       Opacity="0.6"
+                       Foreground="{DynamicResource SidebarForegroundBrush}" />
+
+            <TextBlock Text="Add a git repository root to get started. Grove will discover all worktrees and let you run commands in each one."
+                       TextWrapping="Wrap"
+                       HorizontalAlignment="Center"
+                       TextAlignment="Center"
+                       Opacity="0.5"
+                       Foreground="{DynamicResource SidebarForegroundBrush}" />
+
+            <Button Content="+ Add Repository Root"
+                    Command="{Binding AddRootCommand}"
+                    HorizontalAlignment="Center"
+                    Padding="20,10"
+                    Background="{DynamicResource AccentGreenBrush}"
+                    Foreground="#11111B"
+                    FontWeight="SemiBold"
+                    FontSize="14" />
+
+        </StackPanel>
+    </Border>
+
+</UserControl>

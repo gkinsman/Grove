@@ -1,0 +1,36 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:Grove.ViewModels"
+        xmlns:views="using:Grove.Views"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        mc:Ignorable="d" d:DesignWidth="1200" d:DesignHeight="700"
+        x:Class="Grove.Views.MainWindow"
+        x:DataType="vm:MainWindowViewModel"
+        Title="grove"
+        Width="1200" Height="700"
+        MinWidth="800" MinHeight="500"
+        Background="{DynamicResource DetailBackgroundBrush}">
+
+    <Grid ColumnDefinitions="280,*">
+
+        <!-- Sidebar -->
+        <views:SidebarView Grid.Column="0" />
+
+        <!-- Detail panel or Settings or Empty state -->
+        <Grid Grid.Column="1">
+            <!-- Empty state — shown when no roots configured -->
+            <views:EmptyStateView IsVisible="{Binding !HasRoots}" />
+
+            <!-- Detail panel — shown when a worktree is selected and settings not open -->
+            <ContentControl Content="{Binding Detail}"
+                            IsVisible="{Binding !IsSettingsOpen}" />
+
+            <!-- Settings panel — shown when settings open -->
+            <ContentControl Content="{Binding SettingsViewModel}"
+                            IsVisible="{Binding IsSettingsOpen}" />
+        </Grid>
+
+    </Grid>
+
+</Window>

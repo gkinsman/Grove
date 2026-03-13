@@ -1,0 +1,52 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:Grove.ViewModels"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        mc:Ignorable="d" d:DesignWidth="480" d:DesignHeight="280"
+        x:Class="Grove.Views.AddWorktreeDialog"
+        x:DataType="vm:AddWorktreeViewModel"
+        Title="Add Worktree"
+        Width="480" Height="280"
+        CanResize="False"
+        WindowStartupLocation="CenterOwner"
+        Background="{DynamicResource DetailBackgroundBrush}">
+
+    <StackPanel Margin="32" Spacing="20">
+        <TextBlock Text="Add Worktree"
+                   FontSize="20"
+                   FontWeight="Bold"
+                   Foreground="{DynamicResource SidebarForegroundBrush}" />
+
+        <!-- Branch name -->
+        <StackPanel Spacing="6">
+            <TextBlock Text="BRANCH NAME"
+                       Classes="section-label"
+                       Foreground="{DynamicResource SidebarForegroundBrush}" />
+            <TextBox Text="{Binding BranchName}"
+                     Watermark="e.g. feat/my-feature"
+                     FontFamily="Cascadia Code,Consolas,monospace" />
+        </StackPanel>
+
+        <!-- Custom path (optional) -->
+        <StackPanel Spacing="6">
+            <TextBlock Text="CUSTOM PATH (OPTIONAL)"
+                       Classes="section-label"
+                       Foreground="{DynamicResource SidebarForegroundBrush}" />
+            <TextBox Text="{Binding CustomPath}"
+                     Watermark="Leave empty for default location" />
+        </StackPanel>
+
+        <!-- Buttons -->
+        <StackPanel Orientation="Horizontal" Spacing="12" HorizontalAlignment="Right">
+            <Button Content="Cancel"
+                    Command="{Binding CancelCommand}" />
+            <Button Content="Create Worktree"
+                    Command="{Binding CreateCommand}"
+                    Background="{DynamicResource AccentGreenBrush}"
+                    Foreground="#11111B"
+                    FontWeight="SemiBold" />
+        </StackPanel>
+    </StackPanel>
+
+</Window>

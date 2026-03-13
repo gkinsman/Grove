@@ -1,0 +1,52 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:Grove.ViewModels"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             mc:Ignorable="d" d:DesignWidth="800" d:DesignHeight="400"
+             x:Class="Grove.Views.ConsoleView"
+             x:DataType="vm:WorktreeDetailViewModel">
+
+    <Border Background="{DynamicResource ConsoleBackgroundBrush}">
+        <DockPanel>
+            <!-- Console toolbar -->
+            <Border DockPanel.Dock="Top"
+                    Padding="16,6"
+                    BorderBrush="{DynamicResource BorderBrush}"
+                    BorderThickness="0,0,0,1">
+                <Grid ColumnDefinitions="*,Auto,Auto">
+                    <TextBlock Text="CONSOLE"
+                               Classes="section-label"
+                               Foreground="{DynamicResource ConsoleForegroundBrush}"
+                               VerticalAlignment="Center" />
+                    <Button Grid.Column="1"
+                            Content="Clear"
+                            Command="{Binding ClearConsoleCommand}"
+                            Classes="preset-chip"
+                            Margin="0,0,8,0" />
+                    <Button Grid.Column="2"
+                            Content="Copy"
+                            Command="{Binding CopyConsoleCommand}"
+                            Classes="preset-chip" />
+                </Grid>
+            </Border>
+
+            <!-- Console lines -->
+            <ScrollViewer HorizontalScrollBarVisibility="Auto"
+                          VerticalScrollBarVisibility="Auto"
+                          Name="ConsoleScroller">
+                <ItemsControl ItemsSource="{Binding ConsoleLines}"
+                              Name="ConsoleItemsControl">
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate>
+                            <TextBlock Classes="console-line"
+                                       Text="{Binding RawText}"
+                                       Margin="16,0" />
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+            </ScrollViewer>
+        </DockPanel>
+    </Border>
+
+</UserControl>

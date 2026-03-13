@@ -1,7 +1,7 @@
 using System.Globalization;
 using Avalonia.Data.Converters;
 using Avalonia.Media;
-using Grove.Core.Models;
+using Grove.Models;
 
 namespace Grove.Converters;
 

@@ -6,7 +6,7 @@ using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Media;
 using Avalonia.ReactiveUI;
-using Grove.Core.Models;
+using Grove.Models;
 using Grove.ViewModels;
 using ReactiveUI;
 

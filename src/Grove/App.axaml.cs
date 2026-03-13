@@ -4,7 +4,7 @@ using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Markup.Xaml;
 using Avalonia.Platform;
 using Avalonia.Styling;
-using Grove.Core.Models;
+using Grove.Models;
 using Grove.ViewModels;
 using Grove.Views;
 using Microsoft.Extensions.DependencyInjection;
@@ -43,7 +43,7 @@ public partial class App : Application
             WireTrayIcon();
 
             // Apply initial theme from config
-            ApplyTheme(Services.GetRequiredService<Grove.Core.Services.Abstractions.IConfigService>().Config.Theme);
+            ApplyTheme(Services.GetRequiredService<Grove.Services.Abstractions.IConfigService>().Config.Theme);
         }
 
         base.OnFrameworkInitializationCompleted();

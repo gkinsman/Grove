@@ -3,9 +3,9 @@ using System.Reactive;
 using System.Reactive.Disposables;
 using System.Reactive.Linq;
 using DynamicData;
-using Grove.Core.Models;
-using Grove.Core.Services;
-using Grove.Core.Services.Abstractions;
+using Grove.Models;
+using Grove.Services;
+using Grove.Services.Abstractions;
 using ReactiveUI;
 
 namespace Grove.ViewModels;

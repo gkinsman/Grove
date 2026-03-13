@@ -1,5 +1,5 @@
-using Grove.Core.Services;
-using Grove.Core.Services.Abstractions;
+using Grove.Services;
+using Grove.Services.Abstractions;
 using Grove.ViewModels;
 using Microsoft.Extensions.DependencyInjection;
 

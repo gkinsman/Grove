@@ -1,6 +1,6 @@
 using System.Reactive.Disposables;
 using Avalonia.ReactiveUI;
-using Grove.Core.Models;
+using Grove.Models;
 using Grove.ViewModels;
 using ReactiveUI;
 

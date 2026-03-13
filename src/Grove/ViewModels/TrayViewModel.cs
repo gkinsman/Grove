@@ -2,7 +2,7 @@ using System.Reactive;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.ApplicationLifetimes;
-using Grove.Core.Services.Abstractions;
+using Grove.Services.Abstractions;
 using ReactiveUI;
 
 namespace Grove.ViewModels;

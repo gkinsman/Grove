@@ -1,6 +1,6 @@
 using System.Reactive.Linq;
-using Grove.Core.Models;
-using Grove.Core.Services.Abstractions;
+using Grove.Models;
+using Grove.Services.Abstractions;
 using ReactiveUI;
 
 namespace Grove.ViewModels;

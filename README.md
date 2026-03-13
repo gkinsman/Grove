@@ -17,7 +17,7 @@ Grove is a desktop app that finds all git worktrees for a repo and lets you run 
 - **Runs commands per worktree** — configure `npm run dev`, `dotnet run`, `cargo watch`, whatever — per branch
 - **Live console output** — stdout/stderr streamed in real time, right there in the panel
 - **Keeps running in the background** — close the window, processes keep going, tray icon tells you what's up
-- **Command presets** — save your common commands, one-click to load them
+- **Sync commands between worktrees** - create a new worktree, use the same commands as before
 
 ## Install
 

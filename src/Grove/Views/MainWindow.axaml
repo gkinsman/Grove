@@ -18,6 +18,10 @@
         CanResize="True"
         Background="{DynamicResource DetailBackgroundBrush}">
 
+    <Window.KeyBindings>
+        <KeyBinding Gesture="F5" Command="{Binding RefreshCommand}" />
+    </Window.KeyBindings>
+
     <Grid RowDefinitions="Auto,*">
 
         <!-- Title bar — full width, draggable -->

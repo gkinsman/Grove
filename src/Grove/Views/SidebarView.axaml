@@ -10,6 +10,18 @@
 
     <Border Background="{DynamicResource SidebarBackgroundBrush}">
         <DockPanel>
+            <!-- Top toolbar -->
+            <Grid DockPanel.Dock="Top" ColumnDefinitions="*,Auto" Margin="8,8,8,0">
+                <Button Grid.Column="1"
+                        Command="{Binding RefreshCommand}"
+                        Classes="sidebar-action"
+                        ToolTip.Tip="Refresh worktrees"
+                        Padding="6,4"
+                        HorizontalAlignment="Right">
+                    <TextBlock Text="&#x21BB;" FontSize="14" />
+                </Button>
+            </Grid>
+
             <!-- Bottom buttons -->
             <StackPanel DockPanel.Dock="Bottom" Margin="8,8">
                 <Button Content="+ add root"
@@ -57,7 +69,7 @@
                                                              Fill="{Binding StatusColor}"
                                                              VerticalAlignment="Center" />
                                                     <StackPanel>
-                                                        <TextBlock Text="{Binding BranchName}"
+                                                        <TextBlock Text="{Binding DisplayName}"
                                                                    FontWeight="Medium"
                                                                    Foreground="{DynamicResource SidebarForegroundBrush}" />
                                                         <TextBlock Text="{Binding ShortPath}"

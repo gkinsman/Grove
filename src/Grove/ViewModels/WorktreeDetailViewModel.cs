@@ -16,11 +16,14 @@ public class WorktreeDetailViewModel : ViewModelBase, IDisposable
     private readonly IProcessManager _processManager;
     private readonly IShellService _shell;
     private readonly IConfigService _config;
-    private readonly ConsoleBuffer _consoleBuffer = new();
+    private readonly IProcessRunner _runner;
+    private readonly IReadOnlyList<string> _siblingPaths;
+    private readonly RootConfig? _rootConfig;
+    private readonly CommandSyncService _syncService;
     private readonly CompositeDisposable _disposables = new();
 
     // Header
-    public string BranchName => _info.BranchName;
+    public string BranchName => StripRepoPrefix(_info.BranchName, _info.RepoRootPath);
     public string FullPath => _info.Path;
 
     private string _upstreamBranch = string.Empty;
@@ -48,6 +51,13 @@ public class WorktreeDetailViewModel : ViewModelBase, IDisposable
         set => this.RaiseAndSetIfChanged(ref _command, value);
     }
 
+    private bool _isDefaultCommand;
+    public bool IsDefaultCommand
+    {
+        get => _isDefaultCommand;
+        set => this.RaiseAndSetIfChanged(ref _isDefaultCommand, value);
+    }
+
     // Console
     private readonly ReadOnlyObservableCollection<ConsoleLine> _consoleLines;
     public ReadOnlyObservableCollection<ConsoleLine> ConsoleLines => _consoleLines;
@@ -72,20 +82,24 @@ public class WorktreeDetailViewModel : ViewModelBase, IDisposable
         WorktreeInfo info,
         IProcessManager processManager,
         IShellService shell,
-        IConfigService config)
+        IConfigService config,
+        IReadOnlyList<string> siblingPaths,
+        RootConfig? rootConfig)
     {
         _info = info;
         _processManager = processManager;
         _shell = shell;
         _config = config;
+        _siblingPaths = siblingPaths;
+        _rootConfig = rootConfig;
+        _syncService = new CommandSyncService(_config.Config);
+        _isDefaultCommand = rootConfig?.SyncCommand ?? false;
 
-        var runner = _processManager.GetOrCreate(info.Path);
+        _runner = _processManager.GetOrCreate(info.Path);
+        var runner = _runner;
 
-        // Load saved command for this worktree
-        if (_config.Config.Worktrees.TryGetValue(info.Path, out var wtConfig))
-            _command = wtConfig.Command ?? _config.Config.DefaultCommand;
-        else
-            _command = _config.Config.DefaultCommand;
+        // Load command — sync service handles root vs per-worktree logic
+        _command = _syncService.LoadCommand(info.Path, rootConfig);
 
         // Status from runner
         _status = runner.Status
@@ -100,9 +114,8 @@ public class WorktreeDetailViewModel : ViewModelBase, IDisposable
             .Select(s => s == ProcessStatus.Running)
             .ToProperty(this, x => x.IsRunning);
 
-        // Console buffer — attach to runner output
-        _consoleBuffer.Attach(runner.Output);
-        _consoleBuffer.Connect()
+        // Console — connect to runner's persistent buffer
+        runner.ConsoleOutput.Connect()
             .ObserveOn(RxApp.MainThreadScheduler)
             .Bind(out _consoleLines)
             .Subscribe()
@@ -138,9 +151,36 @@ public class WorktreeDetailViewModel : ViewModelBase, IDisposable
         RunCommand = ReactiveCommand.Create(DoRun, canRun);
         StopCommand = ReactiveCommand.CreateFromTask(DoStopAsync, canStop);
         RestartCommand = ReactiveCommand.CreateFromTask(DoRestartAsync, canStop);
-        ClearConsoleCommand = ReactiveCommand.Create(() => _consoleBuffer.Clear());
+        ClearConsoleCommand = ReactiveCommand.Create(() => _runner.ConsoleOutput.Clear());
         CopyConsoleCommand = ReactiveCommand.CreateFromTask(DoCopyConsoleAsync);
         LoadPresetCommand = ReactiveCommand.Create<CommandPreset>(preset => Command = preset.Command);
+
+        // Auto-save command text when user stops typing (debounced)
+        this.WhenAnyValue(x => x.Command)
+            .Skip(1) // skip initial value set in constructor
+            .Throttle(TimeSpan.FromSeconds(1))
+            .ObserveOn(RxApp.MainThreadScheduler)
+            .Subscribe(__ =>
+            {
+                _syncService.SaveCommand(_info.Path, Command, _rootConfig);
+                _ = _config.SaveAsync();
+            })
+            .DisposeWith(_disposables);
+
+        // When checkbox is toggled, enable/disable sync
+        this.WhenAnyValue(x => x.IsDefaultCommand)
+            .Skip(1)
+            .ObserveOn(RxApp.MainThreadScheduler)
+            .Subscribe(isDefault =>
+            {
+                if (_rootConfig is null) return;
+                if (isDefault)
+                    _syncService.EnableSync(_rootConfig, Command, _siblingPaths);
+                else
+                    _syncService.DisableSync(_rootConfig, _siblingPaths);
+                _ = _config.SaveAsync();
+            })
+            .DisposeWith(_disposables);
     }
 
     private void DoRun()
@@ -152,11 +192,11 @@ public class WorktreeDetailViewModel : ViewModelBase, IDisposable
             var psi = _shell.CreateStartInfo(Command, _info.Path, envOverrides);
             var runner = _processManager.GetOrCreate(_info.Path);
             runner.Start(psi);
-            SaveWorktreeCommand();
+            FlushCommand();
         }
         catch (Exception ex)
         {
-            _consoleBuffer.AddLine($"[grove] Failed to start process: {ex.Message}");
+            _runner.ConsoleOutput.AddLine($"[grove] Failed to start process: {ex.Message}");
         }
     }
 
@@ -189,11 +229,9 @@ public class WorktreeDetailViewModel : ViewModelBase, IDisposable
     // Clipboard text for the view to copy
     public string? ClipboardText { get; private set; }
 
-    private void SaveWorktreeCommand()
+    private void FlushCommand()
     {
-        if (!_config.Config.Worktrees.ContainsKey(_info.Path))
-            _config.Config.Worktrees[_info.Path] = new WorktreeConfig();
-        _config.Config.Worktrees[_info.Path].Command = Command;
+        _syncService.SaveCommand(_info.Path, Command, _rootConfig);
         _ = _config.SaveAsync();
     }
 
@@ -206,9 +244,25 @@ public class WorktreeDetailViewModel : ViewModelBase, IDisposable
         return $"{(int)elapsed.TotalHours}h {elapsed.Minutes}m ago";
     }
 
+    private static string StripRepoPrefix(string branchName, string repoRootPath)
+    {
+        var repoName = Path.GetFileName(repoRootPath.TrimEnd(Path.DirectorySeparatorChar));
+        if (string.IsNullOrEmpty(repoName))
+            return branchName;
+
+        if (branchName.StartsWith(repoName + "-", StringComparison.OrdinalIgnoreCase))
+            return branchName[(repoName.Length + 1)..];
+
+        if (branchName.StartsWith(repoName + "/", StringComparison.OrdinalIgnoreCase))
+            return branchName[(repoName.Length + 1)..];
+
+        return branchName;
+    }
+
     public void Dispose()
     {
+        // Flush any pending command changes before disposing
+        FlushCommand();
         _disposables.Dispose();
-        _consoleBuffer.Dispose();
     }
 }

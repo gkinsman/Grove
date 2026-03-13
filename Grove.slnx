@@ -1,5 +1,6 @@
 <Solution>
   <Folder Name="/src/">
+    <Project Path="src/Grove.Core.Tests/Grove.Core.Tests.csproj" />
     <Project Path="src/Grove.Core/Grove.Core.csproj" />
     <Project Path="src/Grove/Grove.csproj" />
   </Folder>

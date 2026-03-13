@@ -14,6 +14,7 @@ public class RootViewModel : ViewModelBase
     private readonly IGitService _git;
 
     public string Id => _rootConfig.Id;
+    public RootConfig RootConfig => _rootConfig;
     public string Name => System.IO.Path.GetFileName(_rootConfig.Path.TrimEnd(System.IO.Path.DirectorySeparatorChar));
     public string Path => _rootConfig.Path;
     public RootMode Mode => _rootConfig.Mode;

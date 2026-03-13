@@ -19,32 +19,28 @@
                                Classes="section-label"
                                Foreground="{DynamicResource ConsoleForegroundBrush}"
                                VerticalAlignment="Center" />
-                    <Button Grid.Column="1"
-                            Content="Clear"
-                            Command="{Binding ClearConsoleCommand}"
-                            Classes="preset-chip"
-                            Margin="0,0,8,0" />
-                    <Button Grid.Column="2"
-                            Content="Copy"
-                            Command="{Binding CopyConsoleCommand}"
-                            Classes="preset-chip" />
+                    <StackPanel Grid.Column="1"
+                                Orientation="Horizontal"
+                                Spacing="8"
+                                VerticalAlignment="Center">
+                        <Button Content="Clear"
+                                Command="{Binding ClearConsoleCommand}"
+                                Classes="preset-chip" />
+                        <Button Content="Copy"
+                                Name="CopyButton"
+                                Classes="preset-chip" />
+                    </StackPanel>
                 </Grid>
             </Border>
 
-            <!-- Console lines -->
+            <!-- Console output — single selectable text block for cross-line selection -->
             <ScrollViewer HorizontalScrollBarVisibility="Auto"
                           VerticalScrollBarVisibility="Auto"
                           Name="ConsoleScroller">
-                <ItemsControl ItemsSource="{Binding ConsoleLines}"
-                              Name="ConsoleItemsControl">
-                    <ItemsControl.ItemTemplate>
-                        <DataTemplate>
-                            <TextBlock Classes="console-line"
-                                       Text="{Binding RawText}"
-                                       Margin="16,0" />
-                        </DataTemplate>
-                    </ItemsControl.ItemTemplate>
-                </ItemsControl>
+                <SelectableTextBlock Classes="console-line"
+                                     Name="ConsoleTextBlock"
+                                     Margin="16,0"
+                                     Padding="0,4,0,24" />
             </ScrollViewer>
         </DockPanel>
     </Border>

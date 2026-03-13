@@ -10,6 +10,7 @@ public class WorktreeViewModel : ViewModelBase
     public WorktreeInfo Info { get; }
 
     public string BranchName => Info.BranchName;
+    public string DisplayName => StripRepoPrefix(Info.BranchName, Info.RepoRootPath);
     public string ShortPath => ShortenPath(Info.Path);
 
     private ProcessStatus _status = ProcessStatus.Idle;
@@ -54,5 +55,20 @@ public class WorktreeViewModel : ViewModelBase
         return path.StartsWith(home, StringComparison.OrdinalIgnoreCase)
             ? "~" + path[home.Length..]
             : path;
+    }
+
+    private static string StripRepoPrefix(string branchName, string repoRootPath)
+    {
+        var repoName = Path.GetFileName(repoRootPath.TrimEnd(Path.DirectorySeparatorChar));
+        if (string.IsNullOrEmpty(repoName))
+            return branchName;
+
+        if (branchName.StartsWith(repoName + "-", StringComparison.OrdinalIgnoreCase))
+            return branchName[(repoName.Length + 1)..];
+
+        if (branchName.StartsWith(repoName + "/", StringComparison.OrdinalIgnoreCase))
+            return branchName[(repoName.Length + 1)..];
+
+        return branchName;
     }
 }

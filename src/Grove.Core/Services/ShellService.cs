@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Text;
 using Grove.Core.Services.Abstractions;
 
 namespace Grove.Core.Services;
@@ -30,6 +31,8 @@ public sealed class ShellService : IShellService
             RedirectStandardInput = false,
             UseShellExecute = false,
             CreateNoWindow = true,
+            StandardOutputEncoding = Encoding.UTF8,
+            StandardErrorEncoding = Encoding.UTF8,
         };
 
         if (envOverrides is not null)

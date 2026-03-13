@@ -98,6 +98,12 @@
     <Setter Property="Foreground" Value="{DynamicResource ConsoleForegroundBrush}" />
     <Setter Property="TextWrapping" Value="NoWrap" />
   </Style>
+  <Style Selector="SelectableTextBlock.console-line">
+    <Setter Property="FontFamily" Value="Cascadia Code,Cascadia Mono,Consolas,Courier New,monospace" />
+    <Setter Property="FontSize" Value="13" />
+    <Setter Property="Foreground" Value="{DynamicResource ConsoleForegroundBrush}" />
+    <Setter Property="TextWrapping" Value="NoWrap" />
+  </Style>
 
   <!-- Section label -->
   <Style Selector="TextBlock.section-label">

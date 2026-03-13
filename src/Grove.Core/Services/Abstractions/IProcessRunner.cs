@@ -10,6 +10,7 @@ public interface IProcessRunner : IDisposable
     IObservable<ProcessStatus> Status { get; }
     ProcessStatus CurrentStatus { get; }
     DateTimeOffset? StartedAt { get; }
+    ConsoleBuffer ConsoleOutput { get; }
 
     void Start(ProcessStartInfo psi);
     Task StopAsync(TimeSpan? gracePeriod = null);

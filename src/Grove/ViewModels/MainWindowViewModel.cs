@@ -80,9 +80,14 @@ public class MainWindowViewModel : ViewModelBase
 
         // Detail VM derived from selection — dispose previous VM on switch
         _detail = this.WhenAnyValue(x => x.SelectedWorktree)
-            .Select(wt => wt is null
-                ? null
-                : new WorktreeDetailViewModel(wt.Info, _processManager, _shell, _config))
+            .Select(wt =>
+            {
+                if (wt is null) return null;
+                var root = _rootList.FirstOrDefault(r => r.Worktrees.Contains(wt));
+                var siblingPaths = root?.Worktrees.Select(w => w.Info.Path).ToList()
+                    ?? new List<string>();
+                return new WorktreeDetailViewModel(wt.Info, _processManager, _shell, _config, siblingPaths, root?.RootConfig);
+            })
             .Scan<WorktreeDetailViewModel?, WorktreeDetailViewModel?>(null, (prev, next) =>
             {
                 prev?.Dispose();

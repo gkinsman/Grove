@@ -2,11 +2,6 @@ name: Release
 
 on:
   workflow_dispatch:
-    inputs:
-      version:
-        description: 'Release version (e.g. 0.2.0)'
-        required: true
-        type: string
 
 permissions:
   contents: write
@@ -21,29 +16,63 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # need tags for duplicate check
+
+      - name: Read version from csproj
+        id: version
+        shell: pwsh
+        run: |
+          [xml]$proj = Get-Content src/Grove/Grove.csproj
+          $ver = $proj.Project.PropertyGroup.Version
+          echo "VERSION=$ver" >> $env:GITHUB_OUTPUT
+          echo "TAG=v$ver" >> $env:GITHUB_OUTPUT
+          echo "::notice::Version from csproj: $ver"
+
+      - name: Check if tag already exists
+        id: check
+        shell: pwsh
+        run: |
+          $tag = "${{ steps.version.outputs.TAG }}"
+          $exists = git tag -l $tag
+          if ($exists) {
+            echo "SKIP=true" >> $env:GITHUB_OUTPUT
+            echo "::warning::Tag $tag already exists — skipping release"
+          } else {
+            echo "SKIP=false" >> $env:GITHUB_OUTPUT
+          }
 
       - name: Setup .NET
+        if: steps.check.outputs.SKIP != 'true'
         uses: actions/setup-dotnet@v4
         with:
           dotnet-version: '10.0.x'
           dotnet-quality: 'ga'
 
+      - name: Build and test
+        if: steps.check.outputs.SKIP != 'true'
+        run: |
+          dotnet build -c Release
+          dotnet test -c Release --no-build
+
       - name: Publish
+        if: steps.check.outputs.SKIP != 'true'
         run: >
           dotnet publish src/Grove/Grove.csproj
           -c Release
           -r win-x64
           --self-contained
-          -p:Version=${{ inputs.version }}
           -o publish
 
       - name: Zip artifact
-        run: Compress-Archive -Path publish\* -DestinationPath Grove-${{ inputs.version }}-win-x64.zip
+        if: steps.check.outputs.SKIP != 'true'
+        run: Compress-Archive -Path publish\* -DestinationPath Grove-${{ steps.version.outputs.VERSION }}-win-x64.zip
 
       - name: Create GitHub Release
+        if: steps.check.outputs.SKIP != 'true'
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v${{ inputs.version }}
-          name: Grove v${{ inputs.version }}
-          files: Grove-${{ inputs.version }}-win-x64.zip
+          tag_name: ${{ steps.version.outputs.TAG }}
+          name: Grove ${{ steps.version.outputs.TAG }}
+          files: Grove-${{ steps.version.outputs.VERSION }}-win-x64.zip
           generate_release_notes: true

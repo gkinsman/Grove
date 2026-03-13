@@ -17,7 +17,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
         with:
-          fetch-depth: 0  # need tags for duplicate check
+          fetch-depth: 0
 
       - name: Read version from csproj
         id: version
@@ -64,9 +64,12 @@ jobs:
           --self-contained
           -o publish
 
-      - name: Zip artifact
+      - name: Build installer
         if: steps.check.outputs.SKIP != 'true'
-        run: Compress-Archive -Path publish\* -DestinationPath Grove-${{ steps.version.outputs.VERSION }}-win-x64.zip
+        shell: pwsh
+        run: |
+          # InnoSetup is pre-installed on windows-latest runners
+          & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" /DMyAppVersion=${{ steps.version.outputs.VERSION }} installer\grove.iss
 
       - name: Create GitHub Release
         if: steps.check.outputs.SKIP != 'true'
@@ -74,5 +77,5 @@ jobs:
         with:
           tag_name: ${{ steps.version.outputs.TAG }}
           name: Grove ${{ steps.version.outputs.TAG }}
-          files: Grove-${{ steps.version.outputs.VERSION }}-win-x64.zip
+          files: output/Grove-${{ steps.version.outputs.VERSION }}-win-x64-setup.exe
           generate_release_notes: true

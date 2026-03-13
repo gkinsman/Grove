@@ -483,3 +483,6 @@ $RECYCLE.BIN/
 nul
 .weave/state.json
 .weave
+
+# InnoSetup output
+output/

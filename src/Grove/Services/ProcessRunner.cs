@@ -1,5 +1,4 @@
 using System.Diagnostics;
-using System.Reactive;
 using System.Reactive.Disposables;
 using System.Reactive.Linq;
 using System.Reactive.Subjects;
@@ -17,7 +16,6 @@ public sealed class ProcessRunner : IProcessRunner
     private readonly CompositeDisposable _processSubscriptions = new();
 
     public string WorktreePath { get; }
-    public IObservable<string> Output => _output.AsObservable();
     public IObservable<ProcessStatus> Status => _status.AsObservable();
     public ProcessStatus CurrentStatus => _status.Value;
     public DateTimeOffset? StartedAt { get; private set; }
@@ -26,53 +24,44 @@ public sealed class ProcessRunner : IProcessRunner
     public ProcessRunner(string worktreePath)
     {
         WorktreePath = worktreePath;
-        _consoleBuffer.Attach(Output);
+        _consoleBuffer.Attach(_output.AsObservable());
     }
 
     public void Start(ProcessStartInfo psi)
     {
         if (_process is not null && !_process.HasExited)
-            return; // prevent double-start
+            return;
 
         _status.OnNext(ProcessStatus.Starting);
         StartedAt = DateTimeOffset.Now;
 
         var process = new Process { StartInfo = psi, EnableRaisingEvents = true };
 
-        // Bridge stdout to Rx
-        var stdout = Observable.FromEventPattern<DataReceivedEventHandler, DataReceivedEventArgs>(
-            h => process.OutputDataReceived += h,
-            h => process.OutputDataReceived -= h)
-            .Select(e => e.EventArgs.Data);
-
-        // Bridge stderr to Rx
-        var stderr = Observable.FromEventPattern<DataReceivedEventHandler, DataReceivedEventArgs>(
-            h => process.ErrorDataReceived += h,
-            h => process.ErrorDataReceived -= h)
-            .Select(e => e.EventArgs.Data);
-
-        // Bridge exit event to Rx
-        var exited = Observable.FromEventPattern(
-            h => process.Exited += h,
-            h => process.Exited -= h);
+        _processSubscriptions.Add(
+            Observable.Merge(
+                Observable.FromEventPattern<DataReceivedEventHandler, DataReceivedEventArgs>(
+                    h => process.OutputDataReceived += h, h => process.OutputDataReceived -= h)
+                    .Select(e => e.EventArgs.Data),
+                Observable.FromEventPattern<DataReceivedEventHandler, DataReceivedEventArgs>(
+                    h => process.ErrorDataReceived += h, h => process.ErrorDataReceived -= h)
+                    .Select(e => e.EventArgs.Data))
+            .Where(line => line is not null)
+            .Subscribe(line => _output.OnNext(line!)));
 
         _processSubscriptions.Add(
-            Observable.Merge(stdout, stderr)
-                .Where(line => line is not null)
-                .Subscribe(line => _output.OnNext(line!)));
-
-        _processSubscriptions.Add(
-            exited.Take(1).Subscribe(_ =>
-            {
-                try
+            Observable.FromEventPattern(h => process.Exited += h, h => process.Exited -= h)
+                .Take(1)
+                .Subscribe(_ =>
                 {
-                    var exitCode = process.ExitCode;
-                    _output.OnNext($"\n[grove] Process exited with code {exitCode}");
-                    _status.OnNext(exitCode == 0 ? ProcessStatus.Idle : ProcessStatus.Error);
-                }
-                catch { /* process may already be disposed */ }
-                CleanupProcess();
-            }));
+                    try
+                    {
+                        var exitCode = process.ExitCode;
+                        _output.OnNext($"\n[grove] Process exited with code {exitCode}");
+                        _status.OnNext(exitCode == 0 ? ProcessStatus.Idle : ProcessStatus.Error);
+                    }
+                    catch { /* process may already be disposed */ }
+                    CleanupProcess();
+                }));
 
         process.Start();
         process.BeginOutputReadLine();
@@ -81,69 +70,61 @@ public sealed class ProcessRunner : IProcessRunner
         _status.OnNext(ProcessStatus.Running);
     }
 
-    public async Task StopAsync(TimeSpan? gracePeriod = null)
+    public async Task StopAsync()
+    {
+        await KillAsync();
+    }
+
+    public async Task RestartAsync(ProcessStartInfo psi)
+    {
+        await KillAsync();
+        Start(psi);
+    }
+
+    private async Task KillAsync()
     {
         var process = _process;
         if (process is null || process.HasExited)
         {
+            if (_process is not null) CleanupProcess();
             _status.OnNext(ProcessStatus.Idle);
             return;
         }
 
-        var grace = gracePeriod ?? TimeSpan.FromSeconds(5);
-
-        if (OperatingSystem.IsWindows())
+        try
         {
-            try { await RunTaskkillAsync(process.Id, force: false); } catch { /* best effort */ }
-            var exited = await WaitForExitAsync(process, grace);
-            if (!exited)
+            if (OperatingSystem.IsWindows())
             {
-                try { await RunTaskkillAsync(process.Id, force: true); } catch { /* best effort */ }
+                // taskkill /T kills the entire process tree (cmd.exe + child)
+                using var p = Process.Start(new ProcessStartInfo("taskkill", $"/PID {process.Id} /T /F")
+                {
+                    CreateNoWindow = true,
+                    UseShellExecute = false,
+                    RedirectStandardOutput = true,
+                    RedirectStandardError = true,
+                });
+                if (p is not null) await p.WaitForExitAsync();
+            }
+            else
+            {
+                process.Kill(entireProcessTree: true);
             }
         }
-        else
+        catch { /* best effort — process may have already exited */ }
+
+        // Brief wait for the exit handler to fire
+        try
         {
-            try { process.Kill(false); } catch { /* best effort SIGTERM */ }
-            var exited = await WaitForExitAsync(process, grace);
-            if (!exited)
-            {
-                try { process.Kill(true); } catch { /* best effort SIGKILL */ }
-            }
+            using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(2));
+            await process.WaitForExitAsync(cts.Token);
         }
+        catch { /* timeout or already disposed — fine */ }
 
-        // Give the exited event handler a moment to fire and capture final output
-        try { await WaitForExitAsync(process, TimeSpan.FromSeconds(1)); } catch { /* process may already be disposed */ }
-
-        // If the exited handler hasn't cleaned up yet, do it now
         if (_process is not null)
         {
             _status.OnNext(ProcessStatus.Idle);
             CleanupProcess();
         }
-    }
-
-    public async Task RestartAsync(ProcessStartInfo psi, TimeSpan? gracePeriod = null)
-    {
-        // Force-kill immediately for fast restart — no graceful shutdown
-        var process = _process;
-        if (process is not null && !process.HasExited)
-        {
-            if (OperatingSystem.IsWindows())
-            {
-                try { await RunTaskkillAsync(process.Id, force: true); } catch { /* best effort */ }
-            }
-            else
-            {
-                try { process.Kill(true); } catch { /* best effort */ }
-            }
-
-            try { await WaitForExitAsync(process, TimeSpan.FromSeconds(2)); } catch { /* may already be disposed */ }
-        }
-
-        if (_process is not null)
-            CleanupProcess();
-
-        Start(psi);
     }
 
     private void CleanupProcess()
@@ -152,37 +133,6 @@ public sealed class ProcessRunner : IProcessRunner
         try { _process?.Dispose(); } catch { /* ignore */ }
         _process = null;
         StartedAt = null;
-    }
-
-    private static async Task<bool> WaitForExitAsync(Process process, TimeSpan timeout)
-    {
-        try
-        {
-            using var cts = new CancellationTokenSource(timeout);
-            await process.WaitForExitAsync(cts.Token);
-            return true;
-        }
-        catch (OperationCanceledException)
-        {
-            return false;
-        }
-    }
-
-    private static async Task RunTaskkillAsync(int pid, bool force)
-    {
-        var args = force ? $"/PID {pid} /T /F" : $"/PID {pid} /T";
-        try
-        {
-            using var p = Process.Start(new ProcessStartInfo("taskkill", args)
-            {
-                CreateNoWindow = true,
-                UseShellExecute = false,
-                RedirectStandardOutput = true,
-                RedirectStandardError = true,
-            });
-            if (p is not null) await p.WaitForExitAsync();
-        }
-        catch { /* best effort */ }
     }
 
     public void Dispose()

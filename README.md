@@ -4,7 +4,7 @@
 
 ###### \* theoretically cross-platform 🤷‍♂️
 
-Now that it's so easy to create tools for ultra specific first world problems, I solved one of my own. I was tired of [z](https://www.powershellgallery.com/packages/z/1.1.14)'ing around between worktrees to visually test new features once an agent had finished its tasks, so I (we?) built this tool.
+Now that it's so easy to create tools for ultra specific first world problems, I solved one of my own. I was tired of [z](https://www.powershellgallery.com/packages/z/1.1.14)'ing around between worktrees to visually test new features once an agent had finished its tasks, so we built this tool.
 
 
 ![Grove UI](demo.png)
